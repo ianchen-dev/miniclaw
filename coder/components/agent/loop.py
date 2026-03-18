@@ -34,8 +34,14 @@ Agent 就是 while True + stop_reason
     # 使用智能层 (s06)
     loop = AgentLoop(tools=TOOLS, enable_session=True, enable_intelligence=True)
     loop.run()
+
+    # 使用心跳和 Cron (s07)
+    loop = AgentLoop(tools=TOOLS, enable_scheduler=True)
+    loop.run()
 """
 
+import threading
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import litellm
@@ -43,20 +49,20 @@ from litellm import ModelResponse
 
 from coder.settings import settings
 from coder.components.cli import (
+    BLUE,
+    RESET,
     colored_user,
     print_assistant,
     print_banner,
     print_context_bar,
+    print_cron,
     print_error,
     print_goodbye,
+    print_heartbeat,
     print_info,
     print_session,
     print_warn,
 )
-
-# ANSI 颜色代码 (用于直接打印)
-BLUE = "\033[34m"
-RESET = "\033[0m"
 from coder.components.tools import process_tool_call
 
 
@@ -68,6 +74,7 @@ class AgentLoop:
     支持工具调用 (s02)
     支持会话持久化和上下文保护 (s03)
     支持智能层 8 层提示词组装 (s06)
+    支持心跳和 Cron 调度 (s07)
     """
 
     def __init__(
@@ -81,6 +88,8 @@ class AgentLoop:
         enable_session: bool = False,
         agent_id: str = "default",
         enable_intelligence: bool = False,
+        enable_scheduler: bool = False,
+        workspace: Optional[Path] = None,
         channel: str = "terminal",
     ):
         """
@@ -96,6 +105,8 @@ class AgentLoop:
             enable_session: 是否启用会话持久化 (s03)
             agent_id: Agent 标识符，用于会话存储
             enable_intelligence: 是否启用智能层 (s06)
+            enable_scheduler: 是否启用调度器 (s07)
+            workspace: 工作区目录，默认从配置读取
             channel: 通道类型 (terminal/telegram/discord/slack)
         """
         self.model_id = model_id or settings.model_id
@@ -106,8 +117,12 @@ class AgentLoop:
         self.enable_session = enable_session
         self.agent_id = agent_id
         self.enable_intelligence = enable_intelligence
+        self.enable_scheduler = enable_scheduler
         self.channel = channel
         self._custom_system_prompt = system_prompt
+
+        # 工作区
+        self._workspace = workspace or Path(settings.workspace_dir)
 
         # 消息历史
         self.messages: List[Dict[str, Any]] = []
@@ -123,6 +138,13 @@ class AgentLoop:
         self._bootstrap_data: Dict[str, str] = {}
         self._skills_block = ""
 
+        # 调度器组件 (s07)
+        self._lane_lock: Optional[threading.Lock] = None
+        self._heartbeat = None
+        self._cron_service = None
+        self._cron_stop_event: Optional[threading.Event] = None
+        self._cron_thread: Optional[threading.Thread] = None
+
         if self.enable_session:
             from coder.components.session import ContextGuard, SessionStore
 
@@ -131,6 +153,9 @@ class AgentLoop:
 
         if self.enable_intelligence:
             self._init_intelligence()
+
+        if self.enable_scheduler:
+            self._init_scheduler()
 
         # 配置 litellm
         if self.api_base_url:
@@ -152,6 +177,65 @@ class AgentLoop:
         self._skills_block = self._skills_manager.format_prompt_block()
 
         self._memory_store = MemoryStore()
+
+    def _init_scheduler(self) -> None:
+        """初始化调度器组件 (s07)"""
+        from coder.components.scheduler import CronService, HeartbeatRunner
+
+        # Lane 互斥锁
+        self._lane_lock = threading.Lock()
+
+        # 心跳运行器
+        self._heartbeat = HeartbeatRunner(
+            workspace=self._workspace,
+            lane_lock=self._lane_lock,
+        )
+
+        # Cron 服务
+        cron_file = self._workspace / "CRON.json"
+        self._cron_service = CronService(cron_file, workspace=self._workspace)
+
+        # 启动心跳
+        self._heartbeat.start()
+
+        # 启动 Cron 后台线程
+        self._cron_stop_event = threading.Event()
+
+        def cron_loop() -> None:
+            while not self._cron_stop_event.is_set():
+                try:
+                    self._cron_service.tick()
+                except Exception:
+                    pass
+                self._cron_stop_event.wait(timeout=1.0)
+
+        self._cron_thread = threading.Thread(
+            target=cron_loop,
+            daemon=True,
+            name="cron-tick",
+        )
+        self._cron_thread.start()
+
+    def _stop_scheduler(self) -> None:
+        """停止调度器组件"""
+        if self._heartbeat:
+            self._heartbeat.stop()
+
+        if self._cron_stop_event:
+            self._cron_stop_event.set()
+
+        if self._cron_thread:
+            self._cron_thread.join(timeout=3.0)
+
+    def _drain_scheduler_output(self) -> None:
+        """获取并打印调度器输出"""
+        if self._heartbeat:
+            for msg in self._heartbeat.drain_output():
+                print_heartbeat(msg)
+
+        if self._cron_service:
+            for msg in self._cron_service.drain_output():
+                print_cron(msg)
 
     def _build_system_prompt(self, user_input: str = "") -> str:
         """
@@ -362,6 +446,88 @@ class AgentLoop:
 
         return user_input
 
+    def _handle_scheduler_command(self, command: str) -> Tuple[bool, bool]:
+        """
+        处理调度器相关的 REPL 命令 (s07)
+
+        Args:
+            command: 用户输入的命令
+
+        Returns:
+            (是否已处理, 是否应该继续循环)
+        """
+        if not self.enable_scheduler:
+            return False, True
+
+        parts = command.strip().split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "/heartbeat":
+            print_info("--- Heartbeat Status ---")
+            if self._heartbeat:
+                for k, v in self._heartbeat.status().items():
+                    print_info(f"  {k}: {v}")
+            else:
+                print_info("  (heartbeat not initialized)")
+            return True, True
+
+        elif cmd == "/trigger":
+            print_info("--- Trigger Heartbeat ---")
+            if self._heartbeat:
+                result = self._heartbeat.trigger()
+                print_info(f"  {result}")
+                # 打印触发生成的输出
+                for msg in self._heartbeat.drain_output():
+                    print_heartbeat(msg)
+            else:
+                print_info("  (heartbeat not initialized)")
+            return True, True
+
+        elif cmd == "/cron":
+            print_info("--- Cron Jobs ---")
+            if self._cron_service:
+                jobs = self._cron_service.list_jobs()
+                if not jobs:
+                    print_info("  No cron jobs.")
+                else:
+                    for j in jobs:
+                        tag = f"{BLUE}ON{RESET}" if j["enabled"] else f"\033[31mOFF{RESET}"
+                        err = f" \033[33merr:{j['errors']}{RESET}" if j["errors"] else ""
+                        nxt = f" in {j['next_in']}s" if j["next_in"] is not None else ""
+                        print(f"  [{tag}] {j['id']} - {j['name']}{err}{nxt}")
+            else:
+                print_info("  (cron service not initialized)")
+            return True, True
+
+        elif cmd == "/cron-trigger":
+            if not arg:
+                print_warn("  Usage: /cron-trigger <job_id>")
+                return True, True
+            if self._cron_service:
+                result = self._cron_service.trigger_job(arg.strip())
+                print_info(f"  {result}")
+                # 打印触发生成的输出
+                for msg in self._cron_service.drain_output():
+                    print_cron(msg)
+            else:
+                print_info("  (cron service not initialized)")
+            return True, True
+
+        elif cmd == "/lanes":
+            print_info("--- Lane Status ---")
+            if self._lane_lock and self._heartbeat:
+                # 尝试非阻塞获取锁来检测状态
+                locked = not self._lane_lock.acquire(blocking=False)
+                if not locked:
+                    self._lane_lock.release()
+                print_info(f"  main_locked: {locked}  heartbeat_running: {self._heartbeat.running}")
+            else:
+                print_info("  (scheduler not initialized)")
+            return True, True
+
+        return False, True
+
     def _handle_intelligence_command(self, command: str) -> Tuple[bool, bool]:
         """
         处理智能层相关的 REPL 命令 (s06)
@@ -517,9 +683,7 @@ class AgentLoop:
                 return True, True
             print_session("  Compacting history...")
             old_count = len(self.messages)
-            self.messages = self._guard.compact_history(
-                self.messages, self.api_key, self.model_id, self.api_base_url
-            )
+            self.messages = self._guard.compact_history(self.messages, self.api_key, self.model_id, self.api_base_url)
             print_session(f"  {old_count} -> {len(self.messages)} messages")
             return True, True
 
@@ -554,16 +718,27 @@ class AgentLoop:
                 print_info("    /search <query>    Search memories")
                 print_info("    /prompt            Show full system prompt")
                 print_info("    /bootstrap         Show loaded bootstrap files")
+            if self.enable_scheduler:
+                print_info("    /heartbeat         Heartbeat status")
+                print_info("    /trigger           Force heartbeat now")
+                print_info("    /cron              List cron jobs")
+                print_info("    /cron-trigger <id> Trigger a cron job")
+                print_info("    /lanes             Lane lock status")
             print_info("    /help              Show this help")
             print_info("    quit / exit        Exit the REPL")
             return True, True
 
-        # 先尝试智能层命令
+        # 先尝试调度器命令 (s07)
+        handled, should_continue = self._handle_scheduler_command(command)
+        if handled:
+            return handled, should_continue
+
+        # 再尝试智能层命令 (s06)
         handled, should_continue = self._handle_intelligence_command(command)
         if handled:
             return handled, should_continue
 
-        # 再尝试会话命令
+        # 再尝试会话命令 (s03)
         handled, should_continue = self._handle_session_command(command)
         if handled:
             return handled, should_continue
@@ -609,12 +784,20 @@ class AgentLoop:
             extra_info = f"Tools: {', '.join(TOOL_HANDLERS.keys())}"
 
         # 确定章节标题
-        if self.enable_intelligence:
+        if self.enable_scheduler:
+            section = "Section 07: 心跳与 Cron"
+            if self._heartbeat and self._cron_service:
+                hb_status = "on" if self._heartbeat.heartbeat_path.exists() else "off"
+                cron_count = len(self._cron_service.jobs)
+                extra_info = f"Heartbeat: {hb_status} ({self._heartbeat.interval}s) | Cron jobs: {cron_count}"
+                if self.tools:
+                    from coder.components.tools import TOOL_HANDLERS
+
+                    extra_info += f" | Tools: {len(TOOL_HANDLERS)}"
+        elif self.enable_intelligence:
             section = "Section 06: 智能层"
             if self._skills_manager:
-                extra_info = f"Skills: {len(self._skills_manager.skills)}" + (
-                    f" | {extra_info}" if extra_info else ""
-                )
+                extra_info = f"Skills: {len(self._skills_manager.skills)}" + (f" | {extra_info}" if extra_info else "")
             if self._memory_store:
                 stats = self._memory_store.get_stats()
                 mem_info = f"Memory: {stats['daily_entries']} entries"
@@ -632,65 +815,85 @@ class AgentLoop:
 
         print_banner(f"your-claw | {section}", self.model_id, extra_info=extra_info)
 
-        if self.enable_session or self.enable_intelligence:
+        if self.enable_session or self.enable_intelligence or self.enable_scheduler:
             print_info("  Type /help for commands, quit/exit to leave.")
             print()
 
-        while True:
-            # 获取用户输入
-            user_input = self._get_user_input()
-            if user_input is None:
-                break
-            if not user_input:
-                continue
+        try:
+            while True:
+                # 获取调度器输出 (s07)
+                if self.enable_scheduler:
+                    self._drain_scheduler_output()
 
-            # REPL 命令处理
-            if user_input.startswith("/"):
-                handled, _ = self._handle_repl_command(user_input)
-                if handled:
+                # 获取用户输入
+                user_input = self._get_user_input()
+                if user_input is None:
+                    break
+                if not user_input:
                     continue
 
-            # 自动记忆召回 (s06)
-            memory_context = ""
-            if self.enable_intelligence and self._memory_store:
-                from coder.components.intelligence import auto_recall
+                # REPL 命令处理
+                if user_input.startswith("/"):
+                    handled, _ = self._handle_repl_command(user_input)
+                    if handled:
+                        continue
 
-                memory_context = auto_recall(user_input, self._memory_store)
-                if memory_context:
-                    print_info("  [自动召回] 找到相关记忆")
+                # Lane 互斥: 用户消息始终优先 (s07)
+                if self._lane_lock:
+                    self._lane_lock.acquire()
 
-            # 构建系统提示词 (每轮重建，因为记忆可能被更新)
-            system_prompt = self._build_system_prompt(user_input)
+                try:
+                    # 自动记忆召回 (s06)
+                    memory_context = ""
+                    if self.enable_intelligence and self._memory_store:
+                        from coder.components.intelligence import auto_recall
 
-            # 追加到历史
-            self.messages.append(
-                {
-                    "role": "user",
-                    "content": user_input,
-                }
-            )
+                        memory_context = auto_recall(user_input, self._memory_store)
+                        if memory_context:
+                            print_info("  [自动召回] 找到相关记忆")
 
-            # 保存到会话存储 (s03)
-            if self._store:
-                self._store.save_turn("user", user_input)
+                    # 构建系统提示词 (每轮重建，因为记忆可能被更新)
+                    system_prompt = self._build_system_prompt(user_input)
 
-            # 内层循环：处理工具调用
-            # 模型可能连续调用多个工具才最终给出文本回复
-            while True:
-                # 调用 LLM
-                response = self._call_llm(system_prompt)
-                if response is None:
-                    # API 错误，回滚消息到最近的 user 消息
-                    while self.messages and self.messages[-1]["role"] != "user":
-                        self.messages.pop()
-                    if self.messages:
-                        self.messages.pop()
-                    break
+                    # 追加到历史
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": user_input,
+                        }
+                    )
 
-                # 处理响应
-                should_break = self._process_response(response)
-                if should_break:
-                    break
+                    # 保存到会话存储 (s03)
+                    if self._store:
+                        self._store.save_turn("user", user_input)
+
+                    # 内层循环：处理工具调用
+                    # 模型可能连续调用多个工具才最终给出文本回复
+                    while True:
+                        # 调用 LLM
+                        response = self._call_llm(system_prompt)
+                        if response is None:
+                            # API 错误，回滚消息到最近的 user 消息
+                            while self.messages and self.messages[-1]["role"] != "user":
+                                self.messages.pop()
+                            if self.messages:
+                                self.messages.pop()
+                            break
+
+                        # 处理响应
+                        should_break = self._process_response(response)
+                        if should_break:
+                            break
+
+                finally:
+                    # 释放 Lane 锁 (s07)
+                    if self._lane_lock:
+                        self._lane_lock.release()
+
+        finally:
+            # 停止调度器 (s07)
+            if self.enable_scheduler:
+                self._stop_scheduler()
 
 
 def run_agent_loop(
@@ -698,6 +901,7 @@ def run_agent_loop(
     enable_session: bool = False,
     agent_id: str = "default",
     enable_intelligence: bool = False,
+    enable_scheduler: bool = False,
 ) -> None:
     """
     便捷函数：运行 Agent 循环
@@ -707,11 +911,13 @@ def run_agent_loop(
         enable_session: 是否启用会话持久化 (s03)
         agent_id: Agent 标识符，用于会话存储
         enable_intelligence: 是否启用智能层 (s06)
+        enable_scheduler: 是否启用调度器 (s07)
     """
     loop = AgentLoop(
         tools=tools,
         enable_session=enable_session,
         agent_id=agent_id,
         enable_intelligence=enable_intelligence,
+        enable_scheduler=enable_scheduler,
     )
     loop.run()

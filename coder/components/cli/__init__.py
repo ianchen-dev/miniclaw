@@ -14,6 +14,7 @@ RESET = "\033[0m"
 BOLD = "\033[1m"
 MAGENTA = "\033[35m"
 BLUE = "\033[34m"
+ORANGE = "\033[38;5;208m"
 
 
 def colored_user() -> str:
@@ -85,6 +86,16 @@ def print_context_bar(estimated: int, max_tokens: int) -> None:
     print(f"  {color}[{bar}] {pct:.1f}%{RESET}")
 
 
+def print_heartbeat(text: str) -> None:
+    """打印心跳相关文本（蓝色）"""
+    print(f"{BLUE}{BOLD}[heartbeat]{RESET} {text}")
+
+
+def print_cron(text: str) -> None:
+    """打印 Cron 相关文本（紫色）"""
+    print(f"{MAGENTA}{BOLD}[cron]{RESET} {text}")
+
+
 __all__ = [
     "CYAN",
     "GREEN",
@@ -95,6 +106,7 @@ __all__ = [
     "BOLD",
     "MAGENTA",
     "BLUE",
+    "ORANGE",
     "colored_user",
     "print_assistant",
     "print_info",
@@ -105,4 +117,6 @@ __all__ = [
     "print_warn",
     "print_session",
     "print_context_bar",
+    "print_heartbeat",
+    "print_cron",
 ]

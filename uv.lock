@@ -424,6 +424,18 @@ dependencies = [
 sdist = { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/contexts/0.12/Contexts-0.12.tar.gz", hash = "sha256:3f725ad6d426351501bc8f274670196654f9fd3c2f6d778e588cbf7999651ad4" }
 
 [[package]]
+name = "croniter"
+version = "6.2.2"
+source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/croniter/6.2.2/croniter-6.2.2.tar.gz", hash = "sha256:ba60832a5ec8e12e51b8691c3309a113d1cf6526bdf1a48150ce8ec7a532d0ab" }
+wheels = [
+    { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/croniter/6.2.2/croniter-6.2.2-py3-none-any.whl", hash = "sha256:a5d17b1060974d36251ea4faf388233eca8acf0d09cbd92d35f4c4ac8f279960" },
+]
+
+[[package]]
 name = "decli"
 version = "0.6.3"
 source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
@@ -1050,6 +1062,7 @@ dependencies = [
     { name = "captcha" },
     { name = "click" },
     { name = "contexts" },
+    { name = "croniter" },
     { name = "email-validator" },
     { name = "litellm" },
     { name = "loguru" },
@@ -1099,6 +1112,7 @@ requires-dist = [
     { name = "captcha", specifier = "==0.7.0" },
     { name = "click", specifier = ">=8.1.7" },
     { name = "contexts", specifier = ">=0.12" },
+    { name = "croniter", specifier = ">=3.0.0" },
     { name = "email-validator", specifier = "==2.2.0" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'standard'", specifier = "==0.115.12" },
     { name = "litellm", specifier = ">=1.50.0" },
@@ -1768,6 +1782,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/python-dateutil/2.9.0.post0/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3" }
+wheels = [
+    { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/python-dateutil/2.9.0.post0/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427" },
+]
+
+[[package]]
 name = "python-discovery"
 version = "1.1.3"
 source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
@@ -2188,6 +2214,15 @@ source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
 sdist = { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/shellingham/1.5.4/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de" }
 wheels = [
     { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/shellingham/1.5.4/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686" },
+]
+
+[[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "https://nexus.flydiysz.cn/repository/pypi-group/simple" }
+sdist = { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/six/1.17.0/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81" }
+wheels = [
+    { url = "https://nexus.flydiysz.cn/repository/pypi-group/packages/six/1.17.0/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274" },
 ]
 
 [[package]]

@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     memory_decay_rate: float = 0.01  # 记忆时间衰减率
     mmr_lambda: float = 0.7  # MMR 重排序的 lambda 参数
 
+    # 心跳与 Cron 配置 (s07)
+    heartbeat_interval: float = 1800.0  # 心跳间隔 (秒)
+    heartbeat_active_start: int = 9  # 心跳活跃开始时间 (小时, 0-23)
+    heartbeat_active_end: int = 22  # 心跳活跃结束时间 (小时, 0-23)
+    heartbeat_max_queue_size: int = 10  # 心跳输出队列最大大小
+    cron_auto_disable_threshold: int = 5  # Cron 任务连续错误自动禁用阈值
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

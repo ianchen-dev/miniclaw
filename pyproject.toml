@@ -31,6 +31,8 @@ dependencies = [
   "contexts>=0.12",
   # Agent 依赖 (s01)
   "litellm>=1.50.0",
+  # 调度器依赖 (s07)
+  "croniter>=3.0.0",
 ]
 
 [project.optional-dependencies]
