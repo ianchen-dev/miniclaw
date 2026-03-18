@@ -124,3 +124,6 @@ ipython_config.py
 
 # mise
 mise.toml
+
+# docs
+docs/not-committed
