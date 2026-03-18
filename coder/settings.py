@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     delivery_max_retries: int = 5  # 最大重试次数
     delivery_verbose: bool = True  # 是否打印投递详细信息
 
+    # 弹性配置 (s09)
+    resilience_fallback_models: str = ""  # 备选模型链，逗号分隔 (如: "claude-haiku-4-20250514,gpt-4o-mini")
+    resilience_max_overflow_compaction: int = 3  # 最大溢出压缩尝试次数
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

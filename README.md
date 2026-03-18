@@ -14,11 +14,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **智能层 (s06)**: 8层提示词组装，BootstrapLoader，MemoryStore TF-IDF+MMR搜索
 - ✅ **心跳与 Cron (s07)**: Lane 互斥，HeartbeatRunner，CronService 3种调度
 - ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递独立封装
+- ✅ **弹性 (s09)**: 3层重试洋葱，AuthProfile key轮换，备选模型链
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **弹性 (s09)**: 重试洋葱，key轮换
 - 🔲 **并发 (s10)**: LaneQueue，CommandQueue
 
 ### 架构特色
@@ -76,6 +76,11 @@ your-claw/
 │   │       ├── __init__.py          # 投递组件导出
 │   │       ├── queue.py             # DeliveryQueue 持久化队列
 │   │       └── runner.py            # DeliveryRunner 后台投递线程
+│   │   └── resilience/              # 弹性组件 (s09)
+│   │       ├── __init__.py          # 弹性组件导出
+│   │       ├── failure.py           # FailoverReason 失败分类
+│   │       ├── profile.py           # AuthProfile, ProfileManager
+│   │       └── runner.py            # ResilienceRunner 三层重试
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置

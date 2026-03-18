@@ -101,6 +101,11 @@ def print_delivery(text: str) -> None:
     print(f"{BLUE}[delivery]{RESET} {text}")
 
 
+def print_resilience(text: str) -> None:
+    """打印弹性相关文本（紫色）"""
+    print(f"  {MAGENTA}[resilience]{RESET} {text}")
+
+
 __all__ = [
     "CYAN",
     "GREEN",
@@ -125,4 +130,5 @@ __all__ = [
     "print_heartbeat",
     "print_cron",
     "print_delivery",
+    "print_resilience",
 ]
