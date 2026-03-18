@@ -294,8 +294,3 @@ uv run pyright coder/
 # 检查配置文件
 cat pyproject.toml | grep -A 20 "\[tool.pyright\]"
 ```
-
-## 联系方式
-
-- 作者: zaki
-- 邮箱: <746753491@qq.com>
