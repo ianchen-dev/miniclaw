@@ -64,22 +64,46 @@ class ChannelAccount:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-def build_session_key(channel: str, account_id: str, peer_id: str) -> str:
+def build_session_key(
+    channel: str,
+    account_id: str,
+    peer_id: str,
+    agent_id: str = "main",
+    dm_scope: str = "per-peer",
+) -> str:
     """
     构建会话键。
 
-    用于唯一标识一个会话，格式为:
-    agent:main:direct:{channel}:{peer_id}
+    dm_scope 控制私聊隔离粒度:
+        - "main": agent:{id}:main - 所有人共享一个会话
+        - "per-peer": agent:{id}:direct:{peer} - 每个用户隔离
+        - "per-channel-peer": agent:{id}:{ch}:direct:{peer} - 每个平台的不同会话
+        - "per-account-channel-peer": agent:{id}:{ch}:{acc}:direct:{peer} - 最大隔离度
 
     Args:
         channel: 通道类型
         account_id: bot 账号ID
         peer_id: 会话ID
+        agent_id: agent ID (默认 "main")
+        dm_scope: 会话隔离范围 (默认 "per-peer")
 
     Returns:
         格式化的会话键字符串
     """
-    return f"agent:main:direct:{channel}:{peer_id}"
+    from coder.components.gateway.routing import normalize_agent_id
+
+    aid = normalize_agent_id(agent_id)
+    ch = (channel or "unknown").strip().lower()
+    acc = (account_id or "default").strip().lower()
+    pid = (peer_id or "").strip().lower()
+
+    if dm_scope == "per-account-channel-peer" and pid:
+        return f"agent:{aid}:{ch}:{acc}:direct:{pid}"
+    if dm_scope == "per-channel-peer" and pid:
+        return f"agent:{aid}:{ch}:direct:{pid}"
+    if dm_scope == "per-peer" and pid:
+        return f"agent:{aid}:direct:{pid}"
+    return f"agent:{aid}:main"
 
 
 __all__ = [

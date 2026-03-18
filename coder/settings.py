@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     feishu_bot_open_id: str = ""  # 飞书机器人 open_id，用于@检测
     feishu_is_lark: bool = False  # 是否使用 Lark (国际版飞书)
 
+    # 网关配置 (s05)
+    gateway_enabled: bool = False  # 是否启用 WebSocket 网关
+    gateway_host: str = "localhost"  # 网关监听地址
+    gateway_port: int = 8765  # 网关监听端口
+    agents_base_dir: str = "workspace/.agents"  # Agent 配置目录
+    max_concurrent_agents: int = 4  # 最大并发 agent 数量
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -10,11 +10,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
 - ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
 - ✅ **通道 (s04)**: InboundMessage 统一格式，Channel ABC，CLI/Telegram/飞书实现
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道独立封装
+- ✅ **网关与路由 (s05)**: BindingTable 5层路由，AgentManager 多agent，WebSocket 网关
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **网关与路由 (s05)**: 多 agent，WebSocket 网关
 - 🔲 **智能层 (s06)**: 8层提示词组装，MemoryStore
 - 🔲 **心跳与 Cron (s07)**: Lane 互斥，CronService
 - 🔲 **消息投递 (s08)**: DeliveryQueue 持久化
@@ -56,6 +56,12 @@ your-claw/
 │   │   │   ├── store.py             # SessionStore - JSONL 持久化
 │   │   │   └── guard.py             # ContextGuard - 上下文保护
 │   │   └── channels/                # 通道实现 (s04+)
+│   │   └── gateway/                 # 网关与路由 (s05)
+│   │       ├── __init__.py          # 网关组件导出
+│   │       ├── routing.py           # BindingTable 五层路由
+│   │       ├── agent_manager.py     # AgentManager 多agent管理
+│   │       ├── server.py            # GatewayServer WebSocket网关
+│   │       └── event_loop.py        # 共享事件循环
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置
