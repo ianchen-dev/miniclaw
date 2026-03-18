@@ -18,7 +18,7 @@ Agent 就是 while True + stop_reason
 用法:
     from coder.components.agent import AgentLoop
 
-    # 不使用工具
+    # 不使用工具和会话
     loop = AgentLoop()
     loop.run()
 
@@ -26,9 +26,13 @@ Agent 就是 while True + stop_reason
     from coder.components.tools import TOOLS
     loop = AgentLoop(tools=TOOLS)
     loop.run()
+
+    # 使用会话持久化 (s03)
+    loop = AgentLoop(tools=TOOLS, enable_session=True)
+    loop.run()
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import litellm
 from litellm import ModelResponse
 
@@ -41,6 +45,9 @@ from coder.components.cli import (
     print_error,
     print_banner,
     print_goodbye,
+    print_session,
+    print_warn,
+    print_context_bar,
 )
 from coder.components.tools import process_tool_call
 
@@ -60,6 +67,7 @@ class AgentLoop:
 
     管理 messages 状态和 LLM 交互循环
     支持工具调用 (s02)
+    支持会话持久化和上下文保护 (s03)
     """
 
     def __init__(
@@ -70,6 +78,8 @@ class AgentLoop:
         max_tokens: Optional[int] = None,
         system_prompt: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
+        enable_session: bool = False,
+        agent_id: str = "default",
     ):
         """
         初始化 Agent 循环
@@ -81,12 +91,16 @@ class AgentLoop:
             max_tokens: 最大token数，默认从配置读取
             system_prompt: 系统提示词，默认使用组件提供
             tools: 工具schema列表，如果提供则启用工具支持
+            enable_session: 是否启用会话持久化 (s03)
+            agent_id: Agent 标识符，用于会话存储
         """
         self.model_id = model_id or settings.model_id
         self.api_key = api_key or settings.api_key
         self.api_base_url = api_base_url or settings.api_base_url
         self.max_tokens = max_tokens or settings.max_tokens
         self.tools = tools
+        self.enable_session = enable_session
+        self.agent_id = agent_id
 
         # 如果启用了工具，扩展系统提示词
         if self.tools:
@@ -98,6 +112,16 @@ class AgentLoop:
         # 消息历史
         self.messages: List[Dict[str, Any]] = []
 
+        # 会话存储和上下文保护 (s03)
+        self._store = None
+        self._guard = None
+
+        if self.enable_session:
+            from coder.components.session import SessionStore, ContextGuard
+
+            self._store = SessionStore(agent_id=self.agent_id)
+            self._guard = ContextGuard()
+
         # 配置 litellm
         if self.api_base_url:
             litellm.api_base = self.api_base_url
@@ -107,8 +131,21 @@ class AgentLoop:
         return [{"role": "system", "content": self.system_prompt}] + self.messages
 
     def _call_llm(self) -> Optional[ModelResponse]:
-        """调用 LLM API"""
+        """调用 LLM API（带上下文保护）"""
         try:
+            # 如果启用会话，使用 ContextGuard 保护
+            if self._guard:
+                return self._guard.guard_api_call(
+                    api_key=self.api_key,
+                    model=self.model_id,
+                    system=self.system_prompt,
+                    messages=self.messages,
+                    tools=self.tools,
+                    max_tokens=self.max_tokens,
+                    api_base_url=self.api_base_url,
+                )
+
+            # 否则直接调用
             kwargs: Dict[str, Any] = {
                 "model": self.model_id,
                 "max_tokens": self.max_tokens,
@@ -117,7 +154,6 @@ class AgentLoop:
                 "stream": False,
             }
 
-            # 如果有工具，添加 tools 参数
             if self.tools:
                 kwargs["tools"] = self.tools
 
@@ -144,6 +180,11 @@ class AgentLoop:
         if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
             assistant_msg["tool_calls"] = assistant_message.tool_calls
         self.messages.append(assistant_msg)
+
+        # 保存到会话存储 (s03)
+        if self._store:
+            serialized_content = [{"type": "text", "text": assistant_text}] if assistant_text else []
+            self._store.save_turn("assistant", serialized_content)
 
         return True  # 跳出内层循环
 
@@ -175,6 +216,10 @@ class AgentLoop:
 
             # 执行工具
             result = process_tool_call(tool_name, tool_input)
+
+            # 保存到会话存储 (s03)
+            if self._store:
+                self._store.save_tool_result(tool_id, tool_name, tool_input, result)
 
             # 构建工具结果
             tool_results.append(
@@ -209,6 +254,11 @@ class AgentLoop:
                 "content": assistant_text,
             }
         )
+
+        # 保存到会话存储 (s03)
+        if self._store:
+            serialized_content = [{"type": "text", "text": assistant_text}] if assistant_text else []
+            self._store.save_turn("assistant", serialized_content)
 
         return True  # 跳出内层循环
 
@@ -247,6 +297,109 @@ class AgentLoop:
 
         return user_input
 
+    def _handle_repl_command(self, command: str) -> Tuple[bool, bool]:
+        """
+        处理以 / 开头的 REPL 命令。
+
+        Args:
+            command: 用户输入的命令
+
+        Returns:
+            (是否已处理, 是否应该继续循环)
+        """
+        if not self._store or not self._guard:
+            print_warn("  REPL commands require session support. Enable with enable_session=True")
+            return True, True
+
+        parts = command.strip().split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "/new":
+            label = arg or ""
+            sid = self._store.create_session(label)
+            self.messages = []
+            print_session(f"  Created new session: {sid}" + (f" ({label})" if label else ""))
+            return True, True
+
+        elif cmd == "/list":
+            sessions = self._store.list_sessions()
+            if not sessions:
+                print_info("  No sessions found.")
+                return True, True
+
+            print_info("  Sessions:")
+            for sid, meta in sessions:
+                active = " <-- current" if sid == self._store.current_session_id else ""
+                label = meta.get("label", "")
+                label_str = f" ({label})" if label else ""
+                count = meta.get("message_count", 0)
+                last = meta.get("last_active", "?")[:19]
+                print_info(f"    {sid}{label_str}  msgs={count}  last={last}{active}")
+            return True, True
+
+        elif cmd == "/switch":
+            if not arg:
+                print_warn("  Usage: /switch <session_id>")
+                return True, True
+            target_id = arg.strip()
+            matched = [sid for sid in self._store._index if sid.startswith(target_id)]
+            if len(matched) == 0:
+                print_warn(f"  Session not found: {target_id}")
+                return True, True
+            if len(matched) > 1:
+                print_warn(f"  Ambiguous prefix, matches: {', '.join(matched)}")
+                return True, True
+
+            sid = matched[0]
+            self.messages = self._store.load_session(sid)
+            print_session(f"  Switched to session: {sid} ({len(self.messages)} messages)")
+            return True, True
+
+        elif cmd == "/context":
+            estimated = self._guard.estimate_messages_tokens(self.messages)
+            print_context_bar(estimated, self._guard.max_tokens)
+            print_info(f"  Messages: {len(self.messages)}")
+            return True, True
+
+        elif cmd == "/compact":
+            if len(self.messages) <= 4:
+                print_info("  Too few messages to compact (need > 4).")
+                return True, True
+            print_session("  Compacting history...")
+            old_count = len(self.messages)
+            self.messages = self._guard.compact_history(self.messages, self.api_key, self.model_id, self.api_base_url)
+            print_session(f"  {old_count} -> {len(self.messages)} messages")
+            return True, True
+
+        elif cmd == "/help":
+            print_info("  Commands:")
+            print_info("    /new [label]       Create a new session")
+            print_info("    /list              List all sessions")
+            print_info("    /switch <id>       Switch to a session (prefix match)")
+            print_info("    /context           Show context token usage")
+            print_info("    /compact           Manually compact conversation history")
+            print_info("    /help              Show this help")
+            print_info("    quit / exit        Exit the REPL")
+            return True, True
+
+        return False, True
+
+    def _init_session(self) -> None:
+        """初始化会话：恢复最近的会话或创建新会话"""
+        if not self._store:
+            return
+
+        sessions = self._store.list_sessions()
+        if sessions:
+            sid = sessions[0][0]
+            self.messages = self._store.load_session(sid)
+            print_session(f"  Resumed session: {sid} ({len(self.messages)} messages)")
+        else:
+            sid = self._store.create_session("initial")
+            self.messages = []
+            print_session(f"  Created initial session: {sid}")
+
     def run(self) -> None:
         """
         运行 Agent 循环
@@ -257,17 +410,33 @@ class AgentLoop:
         3. 调用 LLM（内层循环处理工具调用）
         4. 根据 finish_reason 分支处理
         """
+        # 初始化会话
+        if self.enable_session:
+            self._init_session()
+
         # 打印横幅
+        extra_info = ""
         if self.tools:
             from coder.components.tools import TOOL_HANDLERS
 
-            print_banner(
-                "your-claw | Section 02: 工具使用",
-                self.model_id,
-                extra_info=f"Tools: {', '.join(TOOL_HANDLERS.keys())}",
-            )
+            extra_info = f"Tools: {', '.join(TOOL_HANDLERS.keys())}"
+
+        if self.enable_session:
+            section = "Section 03: 会话与上下文保护"
+            if extra_info:
+                extra_info = f"Session: {self._store.current_session_id} | {extra_info}"
+            else:
+                extra_info = f"Session: {self._store.current_session_id}"
+        elif self.tools:
+            section = "Section 02: 工具使用"
         else:
-            print_banner("your-claw | Section 01: Agent 循环", self.model_id)
+            section = "Section 01: Agent 循环"
+
+        print_banner(f"your-claw | {section}", self.model_id, extra_info=extra_info)
+
+        if self.enable_session:
+            print_info("  Type /help for commands, quit/exit to leave.")
+            print()
 
         while True:
             # 获取用户输入
@@ -277,6 +446,12 @@ class AgentLoop:
             if not user_input:
                 continue
 
+            # REPL 命令处理 (s03)
+            if user_input.startswith("/"):
+                handled, _ = self._handle_repl_command(user_input)
+                if handled:
+                    continue
+
             # 追加到历史
             self.messages.append(
                 {
@@ -284,6 +459,10 @@ class AgentLoop:
                     "content": user_input,
                 }
             )
+
+            # 保存到会话存储 (s03)
+            if self._store:
+                self._store.save_turn("user", user_input)
 
             # 内层循环：处理工具调用
             # 模型可能连续调用多个工具才最终给出文本回复
@@ -304,12 +483,18 @@ class AgentLoop:
                     break
 
 
-def run_agent_loop(tools: Optional[List[Dict[str, Any]]] = None) -> None:
+def run_agent_loop(
+    tools: Optional[List[Dict[str, Any]]] = None,
+    enable_session: bool = False,
+    agent_id: str = "default",
+) -> None:
     """
     便捷函数：运行 Agent 循环
 
     Args:
         tools: 工具schema列表，如果提供则启用工具支持
+        enable_session: 是否启用会话持久化 (s03)
+        agent_id: Agent 标识符，用于会话存储
     """
-    loop = AgentLoop(tools=tools)
+    loop = AgentLoop(tools=tools, enable_session=enable_session, agent_id=agent_id)
     loop.run()

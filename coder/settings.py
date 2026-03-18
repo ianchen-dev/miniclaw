@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # 工具配置 (s02)
     max_tool_output: int = 50000  # 工具输出最大字符数
 
+    # 会话配置 (s03)
+    context_safe_limit: int = 180000  # 上下文安全限制 (tokens)
+    session_workspace: str = "workspace/.sessions"  # 会话存储目录
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

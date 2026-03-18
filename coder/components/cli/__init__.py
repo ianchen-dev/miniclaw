@@ -8,9 +8,11 @@ CLI 组件 - 终端交互工具
 CYAN = "\033[36m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
+RED = "\033[31m"
 DIM = "\033[2m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
+MAGENTA = "\033[35m"
 
 
 def colored_user() -> str:
@@ -55,13 +57,42 @@ def print_tool(name: str, detail: str) -> None:
     print(f"  {DIM}[tool: {name}] {detail}{RESET}")
 
 
+def print_warn(text: str) -> None:
+    """打印警告文本（黄色）"""
+    print(f"{YELLOW}{text}{RESET}")
+
+
+def print_session(text: str) -> None:
+    """打印会话相关文本（紫色）"""
+    print(f"{MAGENTA}{text}{RESET}")
+
+
+def print_context_bar(estimated: int, max_tokens: int) -> None:
+    """
+    打印上下文使用进度条。
+
+    Args:
+        estimated: 估算的 token 数
+        max_tokens: 最大 token 数
+    """
+    pct = (estimated / max_tokens) * 100
+    bar_len = 30
+    filled = int(bar_len * min(pct, 100) / 100)
+    bar = "#" * filled + "-" * (bar_len - filled)
+    color = GREEN if pct < 50 else (YELLOW if pct < 80 else RED)
+    print_info(f"  Context usage: ~{estimated:,} / {max_tokens:,} tokens")
+    print(f"  {color}[{bar}] {pct:.1f}%{RESET}")
+
+
 __all__ = [
     "CYAN",
     "GREEN",
     "YELLOW",
+    "RED",
     "DIM",
     "RESET",
     "BOLD",
+    "MAGENTA",
     "colored_user",
     "print_assistant",
     "print_info",
@@ -69,4 +100,7 @@ __all__ = [
     "print_banner",
     "print_goodbye",
     "print_tool",
+    "print_warn",
+    "print_session",
+    "print_context_bar",
 ]

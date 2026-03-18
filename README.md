@@ -8,11 +8,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 
 - ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
 - ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具独立封装
+- ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **会话与上下文保护 (s03)**: JSONL 持久化，ContextGuard
 - 🔲 **通道 (s04)**: CLI/Telegram/飞书实现
 - 🔲 **网关与路由 (s05)**: 多 agent，WebSocket 网关
 - 🔲 **智能层 (s06)**: 8层提示词组装，MemoryStore
@@ -51,6 +51,10 @@ your-claw/
 │   │   │   ├── __init__.py          # 工具导出
 │   │   │   ├── schema.py            # TOOLS schema 定义
 │   │   │   └── handlers.py          # 工具处理器
+│   │   ├── session/                 # 会话组件 (s03)
+│   │   │   ├── __init__.py          # 会话导出
+│   │   │   ├── store.py             # SessionStore - JSONL 持久化
+│   │   │   └── guard.py             # ContextGuard - 上下文保护
 │   │   └── channels/                # 通道实现 (s04+)
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
@@ -145,12 +149,17 @@ run_agent_loop()
 # 方式2: 快速启动（带工具）
 run_agent_loop(tools=TOOLS)
 
-# 方式3: 自定义配置
+# 方式3: 快速启动（带工具和会话持久化）
+run_agent_loop(tools=TOOLS, enable_session=True)
+
+# 方式4: 自定义配置
 loop = AgentLoop(
     model_id="gpt-4",
     api_key="your-key",
     system_prompt="You are a code reviewer.",
     tools=TOOLS,  # 可选：启用工具支持
+    enable_session=True,  # 可选：启用会话持久化 (s03)
+    agent_id="my-agent",  # 可选：Agent 标识符
 )
 loop.run()
 ```
