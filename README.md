@@ -15,11 +15,30 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **心跳与 Cron (s07)**: Lane 互斥，HeartbeatRunner，CronService 3种调度
 - ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
 - ✅ **弹性 (s09)**: 3层重试洋葱，AuthProfile key轮换，备选模型链
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性独立封装
+- ✅ **并发 (s10)**: LaneQueue 命名lane，CommandQueue 调度器，Generation 追踪
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发独立封装
+- ✅ **类型安全配置**: Pydantic Settings 配置管理
+
+your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建，将教程代码工程化实现。
+
+## ✨ 特色功能
+
+### 已实现功能
+
+- ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
+- ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
+- ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
+- ✅ **通道 (s04)**: InboundMessage 统一格式，Channel ABC，CLI/Telegram/飞书实现
+- ✅ **网关与路由 (s05)**: BindingTable 5层路由，AgentManager 多agent，WebSocket 网关
+- ✅ **智能层 (s06)**: 8层提示词组装，BootstrapLoader，MemoryStore TF-IDF+MMR搜索
+- ✅ **心跳与 Cron (s07)**: Lane 互斥，HeartbeatRunner，CronService 3种调度
+- ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
+- ✅ **弹性 (s09)**: 3层重试洋葱，AuthProfile key轮换，备选模型链
+- ✅ **并发 (s10)**: LaneQueue 命名lane，CommandQueue 调度器，Generation 追踪
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **并发 (s10)**: LaneQueue，CommandQueue
 
 ### 架构特色
 
@@ -81,6 +100,9 @@ your-claw/
 │   │       ├── failure.py           # FailoverReason 失败分类
 │   │       ├── profile.py           # AuthProfile, ProfileManager
 │   │       └── runner.py            # ResilienceRunner 三层重试
+│   │   └── concurrency/             # 并发组件 (s10)
+│   │       ├── __init__.py          # 并发组件导出
+│   │       └── queue.py             # LaneQueue, CommandQueue
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置

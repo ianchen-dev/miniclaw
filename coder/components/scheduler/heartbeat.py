@@ -4,7 +4,22 @@
 心跳运行器使用 Lane 互斥机制，确保用户消息始终优先于后台任务。
 当用户正在与 Agent 交互时，心跳任务会自动让步。
 
+s10 更新: 支持 CommandQueue 基于 lane 的调度，替代原有的锁机制。
+当提供 command_queue 时，使用 lane 统计信息进行非阻塞检查。
+
 用法:
+    # 方式1: 使用 CommandQueue (推荐，s10+)
+    from coder.components.scheduler import HeartbeatRunner
+    from coder.components.concurrency import CommandQueue, LANE_HEARTBEAT
+
+    cmd_queue = CommandQueue()
+    heartbeat = HeartbeatRunner(
+        workspace=Path("workspace"),
+        command_queue=cmd_queue,
+    )
+    heartbeat.start()
+
+    # 方式2: 使用 Lock (向后兼容，s07)
     from coder.components.scheduler import HeartbeatRunner
 
     lane_lock = threading.Lock()
@@ -27,6 +42,7 @@
     heartbeat.stop()
 """
 
+import concurrent.futures
 import threading
 import time
 from datetime import datetime
@@ -44,33 +60,40 @@ class HeartbeatRunner:
 
     工作流程:
     1. 后台线程每秒检查一次 should_run()
-    2. 如果满足条件，尝试获取 lane_lock (非阻塞)
-    3. 获取成功则执行心跳任务
+    2. 如果满足条件，检查 lane 是否可用
+    3. 如果可用则执行心跳任务 (通过 CommandQueue 入队或直接执行)
     4. 解析响应，去除 HEARTBEAT_OK 标记
     5. 去重后将结果放入输出队列
+
+    s10 更新:
+    - 支持 command_queue 参数，使用 lane-based 调度
+    - 向后兼容 lane_lock 参数
     """
 
     def __init__(
         self,
         workspace: Path,
-        lane_lock: threading.Lock,
+        lane_lock: Optional[threading.Lock] = None,
         interval: Optional[float] = None,
         active_hours: Optional[Tuple[int, int]] = None,
         max_queue_size: Optional[int] = None,
+        command_queue: Optional[Any] = None,  # CommandQueue 类型，避免循环导入
     ) -> None:
         """
         初始化心跳运行器
 
         Args:
             workspace: 工作区目录
-            lane_lock: Lane 互斥锁，与主循环共享
+            lane_lock: Lane 互斥锁，与主循环共享 (s07 兼容模式)
             interval: 心跳间隔 (秒)，默认从配置读取
             active_hours: 活跃时间范围 (开始小时, 结束小时)，默认从配置读取
             max_queue_size: 输出队列最大大小，默认从配置读取
+            command_queue: CommandQueue 实例，用于 lane-based 调度 (s10+ 推荐)
         """
         self.workspace = workspace
         self.heartbeat_path = workspace / "HEARTBEAT.md"
         self.lane_lock = lane_lock
+        self.command_queue = command_queue
         self.interval = interval or settings.heartbeat_interval
         self.active_hours = active_hours or (
             settings.heartbeat_active_start,
@@ -191,9 +214,54 @@ class HeartbeatRunner:
 
         return instructions, system_prompt
 
-    def _execute(self) -> None:
+    def _execute_with_queue(self) -> None:
         """
-        执行一次心跳运行
+        使用 CommandQueue 执行心跳 (s10+)
+
+        通过 lane 统计信息进行非阻塞检查，如果 lane 不忙则入队执行。
+        """
+        from coder.components.concurrency import LANE_HEARTBEAT
+
+        # 检查 heartbeat lane 是否有活跃任务
+        lane_stats = self.command_queue.get_or_create_lane(LANE_HEARTBEAT).stats()
+        if lane_stats["active"] > 0:
+            # lane 正忙，跳过本次心跳
+            return
+
+        def _do_heartbeat() -> Optional[str]:
+            """执行心跳任务"""
+            instructions, sys_prompt = self._build_heartbeat_prompt()
+            if not instructions:
+                return None
+            response = self._run_single_turn(instructions, sys_prompt)
+            return self._parse_response(response)
+
+        future = self.command_queue.enqueue(LANE_HEARTBEAT, _do_heartbeat)
+
+        def _on_done(f: concurrent.futures.Future) -> None:
+            """任务完成回调"""
+            self.last_run_at = time.time()
+            try:
+                meaningful = f.result()
+                if meaningful is None:
+                    return
+                # 去重
+                if meaningful.strip() == self._last_output:
+                    return
+                self._last_output = meaningful.strip()
+                # 放入输出队列
+                with self._queue_lock:
+                    if len(self._output_queue) < self.max_queue_size:
+                        self._output_queue.append(meaningful)
+            except Exception as exc:
+                with self._queue_lock:
+                    self._output_queue.append(f"[heartbeat error: {exc}]")
+
+        future.add_done_callback(_on_done)
+
+    def _execute_with_lock(self) -> None:
+        """
+        使用 Lock 执行心跳 (s07 兼容)
 
         非阻塞获取锁；如果忙则跳过（用户优先）。
         """
@@ -238,6 +306,17 @@ class HeartbeatRunner:
             self.running = False
             self.last_run_at = time.time()
             self.lane_lock.release()
+
+    def _execute(self) -> None:
+        """
+        执行一次心跳运行
+
+        根据 command_queue 或 lane_lock 选择执行方式。
+        """
+        if self.command_queue is not None:
+            self._execute_with_queue()
+        elif self.lane_lock is not None:
+            self._execute_with_lock()
 
     def _run_single_turn(self, prompt: str, system_prompt: str) -> str:
         """
@@ -319,6 +398,21 @@ class HeartbeatRunner:
             self._output_queue.clear()
             return items
 
+    def heartbeat_tick(self) -> None:
+        """
+        手动触发一次心跳 tick (s10+)
+
+        与 trigger() 不同，这个方法遵循所有前置检查。
+        """
+        ok, reason = self.should_run()
+        if not ok:
+            return
+
+        if self.command_queue is not None:
+            self._execute_with_queue()
+        elif self.lane_lock is not None:
+            self._execute_with_lock()
+
     def trigger(self) -> str:
         """
         手动触发心跳
@@ -328,7 +422,49 @@ class HeartbeatRunner:
         Returns:
             触发结果说明
         """
-        # 非阻塞获取锁
+        # 使用 CommandQueue 模式
+        if self.command_queue is not None:
+            from coder.components.concurrency import LANE_HEARTBEAT
+
+            lane_stats = self.command_queue.get_or_create_lane(LANE_HEARTBEAT).stats()
+            if lane_stats["active"] > 0:
+                return "heartbeat lane occupied, cannot trigger"
+
+            instructions, sys_prompt = self._build_heartbeat_prompt()
+            if not instructions:
+                return "HEARTBEAT.md is empty"
+
+            def _do_trigger() -> Optional[str]:
+                response = self._run_single_turn(instructions, sys_prompt)
+                return self._parse_response(response)
+
+            future = self.command_queue.enqueue(LANE_HEARTBEAT, _do_trigger)
+
+            try:
+                meaningful = future.result(timeout=60)
+                if meaningful is None:
+                    return "HEARTBEAT_OK (nothing to report)"
+
+                if meaningful.strip() == self._last_output:
+                    return "duplicate content (skipped)"
+
+                self._last_output = meaningful.strip()
+                self.last_run_at = time.time()
+
+                with self._queue_lock:
+                    self._output_queue.append(meaningful)
+
+                return f"triggered, output queued ({len(meaningful)} chars)"
+
+            except concurrent.futures.TimeoutError:
+                return "trigger timed out"
+            except Exception as exc:
+                return f"trigger failed: {exc}"
+
+        # 使用 Lock 模式 (向后兼容)
+        if self.lane_lock is None:
+            return "no lane_lock or command_queue configured"
+
         acquired = self.lane_lock.acquire(blocking=False)
         if not acquired:
             return "main lane occupied, cannot trigger"

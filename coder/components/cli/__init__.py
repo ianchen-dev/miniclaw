@@ -106,6 +106,66 @@ def print_resilience(text: str) -> None:
     print(f"  {MAGENTA}[resilience]{RESET} {text}")
 
 
+def print_lane(lane_name: str, text: str) -> None:
+    """
+    打印 lane 相关文本
+
+    根据不同的 lane 名称使用不同的颜色:
+    - main: 青色
+    - cron: 紫色
+    - heartbeat: 蓝色
+    - 其他: 黄色
+
+    Args:
+        lane_name: Lane 名称
+        text: 要打印的文本
+    """
+    color = {
+        "main": CYAN,
+        "cron": MAGENTA,
+        "heartbeat": BLUE,
+    }.get(lane_name, YELLOW)
+    print(f"{color}{BOLD}[{lane_name}]{RESET} {text}")
+
+
+def print_lanes_stats(stats: dict) -> None:
+    """
+    打印所有 lanes 的统计信息
+
+    Args:
+        stats: CommandQueue.stats() 返回的统计字典
+    """
+    if not stats:
+        print_info("  No lanes.")
+        return
+
+    for name, st in stats.items():
+        active = st["active"]
+        max_c = st["max_concurrency"]
+        active_bar = "*" * active + "." * (max_c - active)
+        print_info(
+            f"  {name:12s}  active=[{active_bar}]  queued={st['queue_depth']}  max={max_c}  gen={st['generation']}"
+        )
+
+
+def print_queue_status(stats: dict) -> None:
+    """
+    打印队列状态
+
+    Args:
+        stats: CommandQueue.stats() 返回的统计字典
+    """
+    total = sum(st["queue_depth"] for st in stats.values())
+
+    if total == 0:
+        print_info("  All lanes empty.")
+        return
+
+    for name, st in stats.items():
+        if st["queue_depth"] > 0 or st["active"] > 0:
+            print_info(f"  {name}: {st['queue_depth']} queued, {st['active']} active")
+
+
 __all__ = [
     "CYAN",
     "GREEN",
@@ -131,4 +191,7 @@ __all__ = [
     "print_cron",
     "print_delivery",
     "print_resilience",
+    "print_lane",
+    "print_lanes_stats",
+    "print_queue_status",
 ]

@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     resilience_fallback_models: str = ""  # 备选模型链，逗号分隔 (如: "claude-haiku-4-20250514,gpt-4o-mini")
     resilience_max_overflow_compaction: int = 3  # 最大溢出压缩尝试次数
 
+    # 并发配置 (s10)
+    lane_main_max_concurrency: int = 1  # main lane 最大并发数
+    lane_cron_max_concurrency: int = 1  # cron lane 最大并发数
+    lane_heartbeat_max_concurrency: int = 1  # heartbeat lane 最大并发数
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -10,8 +10,20 @@ Cron 服务 - 定时任务调度
 - 连续错误自动禁用
 - 任务运行日志
 - 输出队列
+- s10 更新: 支持 CommandQueue 基于 lane 的调度
 
 用法:
+    # 方式1: 使用 CommandQueue (推荐，s10+)
+    from coder.components.scheduler import CronService
+    from coder.components.concurrency import CommandQueue, LANE_CRON
+
+    cmd_queue = CommandQueue()
+    cron_svc = CronService(
+        cron_file=Path("workspace/CRON.json"),
+        command_queue=cmd_queue,
+    )
+
+    # 方式2: 独立运行 (向后兼容)
     from coder.components.scheduler import CronService
 
     cron_svc = CronService(Path("workspace/CRON.json"))
@@ -26,6 +38,7 @@ Cron 服务 - 定时任务调度
     outputs = cron_svc.drain_output()
 """
 
+import concurrent.futures
 import json
 import threading
 import time
@@ -75,17 +88,28 @@ class CronService:
 
     从 CRON.json 加载任务定义，每秒检查一次是否有任务到期。
     支持三种调度类型，连续错误超过阈值后自动禁用任务。
+
+    s10 更新:
+    - 支持 command_queue 参数，使用 lane-based 调度
+    - 任务通过 CommandQueue 入队到 cron lane 执行
     """
 
-    def __init__(self, cron_file: Path, workspace: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        cron_file: Path,
+        workspace: Optional[Path] = None,
+        command_queue: Optional[Any] = None,  # CommandQueue 类型，避免循环导入
+    ) -> None:
         """
         初始化 Cron 服务
 
         Args:
             cron_file: CRON.json 文件路径
             workspace: 工作区目录，用于运行日志存储
+            command_queue: CommandQueue 实例，用于 lane-based 调度 (s10+)
         """
         self.cron_file = cron_file
+        self.command_queue = command_queue
         self.jobs: List[CronJob] = []
 
         # 工作区
@@ -205,7 +229,10 @@ class CronService:
                 continue
 
             # 执行任务
-            self._run_job(job, now)
+            if self.command_queue is not None:
+                self._enqueue_job(job, now)
+            else:
+                self._run_job(job, now)
 
             # 标记一次性任务删除
             if job.delete_after_run and job.schedule_kind == "at":
@@ -214,6 +241,68 @@ class CronService:
         # 删除标记的任务
         if remove_ids:
             self.jobs = [j for j in self.jobs if j.id not in remove_ids]
+
+    def _enqueue_job(self, job: CronJob, now: float) -> None:
+        """
+        将任务入队到 CommandQueue (s10+)
+
+        Args:
+            job: Cron 任务
+            now: 当前时间戳
+        """
+        from coder.components.concurrency import LANE_CRON
+
+        payload = job.payload
+        kind = payload.get("kind", "")
+        message = payload.get("message", "")
+        job_name = job.name
+
+        if kind != "agent_turn" or not message:
+            # 非 agent_turn 类型或空消息，直接跳过
+            job.next_run_at = self._compute_next(job, now)
+            return
+
+        def _do_cron() -> str:
+            """执行 cron 任务"""
+            sys_prompt = (
+                "You are performing a scheduled background task. Be concise. "
+                f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            return self._run_single_turn(message, sys_prompt)
+
+        future = self.command_queue.enqueue(LANE_CRON, _do_cron)
+
+        def _on_done(
+            f: concurrent.futures.Future,
+            j: CronJob = job,
+            n: str = job_name,
+            current_now: float = now,
+        ) -> None:
+            """任务完成回调"""
+            j.last_run_at = time.time()
+            j.next_run_at = time.time() + self._get_interval(j)
+            try:
+                result = f.result()
+                j.consecutive_errors = 0
+                if result:
+                    with self._queue_lock:
+                        self._output_queue.append(f"[{n}] {result}")
+            except Exception as exc:
+                j.consecutive_errors += 1
+                with self._queue_lock:
+                    self._output_queue.append(f"[{n}] error: {exc}")
+                if j.consecutive_errors >= settings.cron_auto_disable_threshold:
+                    j.enabled = False
+                    self._queue_output(f"Job '{n}' auto-disabled after 5 consecutive errors")
+
+        future.add_done_callback(_on_done)
+        job.next_run_at = now + self._get_interval(job)
+
+    def _get_interval(self, job: CronJob) -> float:
+        """获取任务的执行间隔"""
+        if job.schedule_kind == "every":
+            return job.schedule_config.get("every_seconds", 3600)
+        return 3600  # 默认 1 小时
 
     def _run_job(self, job: CronJob, now: float) -> None:
         """
@@ -345,8 +434,14 @@ class CronService:
         """
         for job in self.jobs:
             if job.id == job_id:
-                self._run_job(job, time.time())
-                return f"'{job.name}' triggered (errors={job.consecutive_errors})"
+                if self.command_queue is not None:
+                    # 使用 CommandQueue 模式
+                    self._enqueue_job(job, time.time())
+                    return f"'{job.name}' enqueued (errors={job.consecutive_errors})"
+                else:
+                    # 直接执行
+                    self._run_job(job, time.time())
+                    return f"'{job.name}' triggered (errors={job.consecutive_errors})"
 
         return f"Job '{job_id}' not found"
 
