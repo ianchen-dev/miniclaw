@@ -13,6 +13,7 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 MAGENTA = "\033[35m"
+BLUE = "\033[34m"
 
 
 def colored_user() -> str:
@@ -93,6 +94,7 @@ __all__ = [
     "RESET",
     "BOLD",
     "MAGENTA",
+    "BLUE",
     "colored_user",
     "print_assistant",
     "print_info",

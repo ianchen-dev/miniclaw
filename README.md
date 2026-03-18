@@ -9,11 +9,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
 - ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
 - ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话独立封装
+- ✅ **通道 (s04)**: InboundMessage 统一格式，Channel ABC，CLI/Telegram/飞书实现
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **通道 (s04)**: CLI/Telegram/飞书实现
 - 🔲 **网关与路由 (s05)**: 多 agent，WebSocket 网关
 - 🔲 **智能层 (s06)**: 8层提示词组装，MemoryStore
 - 🔲 **心跳与 Cron (s07)**: Lane 互斥，CronService

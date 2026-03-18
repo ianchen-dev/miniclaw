@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     context_safe_limit: int = 180000  # 上下文安全限制 (tokens)
     session_workspace: str = "workspace/.sessions"  # 会话存储目录
 
+    # 通道配置 (s04)
+    telegram_bot_token: Optional[str] = None
+    telegram_allowed_chats: str = ""  # 逗号分隔的聊天ID白名单
+    feishu_app_id: Optional[str] = None
+    feishu_app_secret: Optional[str] = None
+    feishu_encrypt_key: str = ""  # 飞书事件订阅加密key
+    feishu_bot_open_id: str = ""  # 飞书机器人 open_id，用于@检测
+    feishu_is_lark: bool = False  # 是否使用 Lark (国际版飞书)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
