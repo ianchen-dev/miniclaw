@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings
 
@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     cors_allow_credentials: bool = True
     cors_max_age: int = 86400
     cors_expose_headers: List[str] = []
+
+    # Agent 配置 (s01)
+    api_key: Optional[str] = None
+    model_id: str = "claude-sonnet-4-20250514"
+    api_base_url: Optional[str] = None
+    max_tokens: int = 8096
 
     class Config:
         env_file = ".env"

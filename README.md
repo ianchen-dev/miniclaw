@@ -1,12 +1,26 @@
-# 【Your-project-name】
+# your-claw
 
-【Your-project-name】，
+your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建，将教程代码工程化实现。
 
 ## ✨ 特色功能
 
 ### 已实现功能
 
+- ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
+- ✅ **模块化组件**: CLI、提示词、Agent 循环独立封装
+- ✅ **类型安全配置**: Pydantic Settings 配置管理
+
 ### 规划中功能
+
+- 🔲 **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发
+- 🔲 **会话与上下文保护 (s03)**: JSONL 持久化，ContextGuard
+- 🔲 **通道 (s04)**: CLI/Telegram/飞书实现
+- 🔲 **网关与路由 (s05)**: 多 agent，WebSocket 网关
+- 🔲 **智能层 (s06)**: 8层提示词组装，MemoryStore
+- 🔲 **心跳与 Cron (s07)**: Lane 互斥，CronService
+- 🔲 **消息投递 (s08)**: DeliveryQueue 持久化
+- 🔲 **弹性 (s09)**: 重试洋葱，key轮换
+- 🔲 **并发 (s10)**: LaneQueue，CommandQueue
 
 ### 架构特色
 
@@ -19,34 +33,35 @@
 ## 项目结构
 
 ```
-fastapi-scaffold/
+your-claw/
 ├── coder/                           # 核心应用模块
 │   ├── common/                      # 公共工具模块
 │   │   ├── exception_handler.py     # 异常处理器
 │   │   ├── logger.py                # 日志配置
 │   │   ├── path.py                  # 路径管理
-│   │   ├── time.py                  # 时间工具
-│   │   └── ...                      # 其他工具
+│   │   └── time.py                  # 时间工具
+│   ├── components/                  # Agent 组件
+│   │   ├── agent/                   # Agent 循环
+│   │   │   ├── __init__.py
+│   │   │   └── loop.py              # AgentLoop 类
+│   │   ├── cli/                     # CLI 工具
+│   │   │   └── __init__.py          # 颜色输出、输入提示
+│   │   ├── prompts/                 # 提示词管理
+│   │   │   └── __init__.py          # 系统提示词
+│   │   └── channels/                # 通道实现 (s04+)
 │   ├── middleware/                  # 中间件
-│   ├── utils/                       # 工具函数
+│   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置
 │   ├── settings.py                  # 配置管理
 │   └── run.py                       # 服务启动器
+├── docs/
+│   ├── scaffold/                    # 脚手架文档
+│   ├── your-claw-guide/             # 教程文档
+│   └── your-claw-project/           # 工程化文档
 ├── extended/                        # 框架扩展
-│   └── fastapi/                     # FastAPI 扩展
-│       └── responses.py             # 自定义响应类
 ├── scripts/                         # 开发脚本
-│   └── dev/                         # 开发工具
-│       ├── setup_dev.py             # 环境设置
-│       ├── check_dev.py             # 环境检查
-│       └── format_code.py           # 代码格式化
 ├── static/                          # 静态文件
-│   ├── assets/                      # 静态资源
-│   └── swagger/                     # Swagger UI 资源
-├── templates/                       # Jinja2 模板
 ├── tests/                           # 测试文件
-│   └── studies/                     # 研究和测试
-├── logs/                            # 日志文件
 ├── manage.py                        # 管理脚本
 └── pyproject.toml                   # 项目配置和依赖
 ```
@@ -108,6 +123,28 @@ API_DOCS_ENABLED=true
 # CORS配置
 CORS_ALLOWED_ORIGIN_PATTERNS=["*"]
 
+# Agent 配置
+API_KEY=your-api-key-here
+MODEL_ID=claude-sonnet-4-20250514
+API_BASE_URL=
+MAX_TOKENS=8096
+```
+
+### 运行 Agent
+
+```python
+from coder.components.agent import AgentLoop, run_agent_loop
+
+# 方式1: 快速启动
+run_agent_loop()
+
+# 方式2: 自定义配置
+loop = AgentLoop(
+    model_id="gpt-4",
+    api_key="your-key",
+    system_prompt="You are a code reviewer."
+)
+loop.run()
 ```
 
 ### 健康检查
@@ -193,6 +230,7 @@ class MyMiddleware(BaseHTTPMiddleware):
 ## 技术栈
 
 - **Web 框架**: FastAPI 0.115.12 with standard extras
+- **LLM 调用**: LiteLLM (支持多种模型)
 - **配置管理**: Pydantic Settings 2.8.1
 - **依赖管理**: UV
 - **类型检查**: Pyright 1.1.391

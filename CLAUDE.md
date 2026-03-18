@@ -131,8 +131,30 @@ Environment variables in `.env` (copy from `.env.example`):
 - `API_DOCS_ENABLED` - Enable/disable Swagger UI
 - `HOST`, `PORT`, `WORKERS` - Server configuration
 - `CORS_*` - CORS settings
+- `API_KEY`, `MODEL_ID`, `API_BASE_URL`, `MAX_TOKENS` - Agent configuration
 
 Settings class in `coder/settings.py` uses Pydantic Settings with automatic env var loading.
+
+### Agent Components (s01+)
+```
+coder/components/
+├── cli/                    # CLI tools (colors, input/output)
+├── prompts/                # System prompt management
+├── agent/                  # Agent loop implementation
+└── channels/               # Channel implementations (s04+)
+```
+
+Running Agent Loop:
+```python
+from coder.components.agent import AgentLoop, run_agent_loop
+
+# Quick start
+run_agent_loop()
+
+# With custom config
+loop = AgentLoop(model_id="gpt-4", api_key="your-key")
+loop.run()
+```
 
 ### Adding New Routes
 1. Create controller in `coder/controllers/my_controller.py`
