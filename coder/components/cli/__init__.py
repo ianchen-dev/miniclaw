@@ -33,11 +33,13 @@ def print_error(text: str) -> None:
     print(f"\n{YELLOW}Error: {text}{RESET}\n")
 
 
-def print_banner(title: str, model: str) -> None:
+def print_banner(title: str, model: str, extra_info: str = "") -> None:
     """打印启动横幅"""
     print_info("=" * 60)
     print_info(f"  {title}")
     print_info(f"  Model: {model}")
+    if extra_info:
+        print_info(f"  {extra_info}")
     print_info("  输入 'quit' 或 'exit' 退出. Ctrl+C 同样有效.")
     print_info("=" * 60)
     print()
@@ -46,6 +48,11 @@ def print_banner(title: str, model: str) -> None:
 def print_goodbye() -> None:
     """打印再见消息"""
     print(f"{DIM}再见.{RESET}")
+
+
+def print_tool(name: str, detail: str) -> None:
+    """打印工具调用信息"""
+    print(f"  {DIM}[tool: {name}] {detail}{RESET}")
 
 
 __all__ = [
@@ -61,4 +68,5 @@ __all__ = [
     "print_error",
     "print_banner",
     "print_goodbye",
+    "print_tool",
 ]

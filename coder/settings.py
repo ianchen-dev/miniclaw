@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     api_base_url: Optional[str] = None
     max_tokens: int = 8096
 
+    # 工具配置 (s02)
+    max_tool_output: int = 50000  # 工具输出最大字符数
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

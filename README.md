@@ -7,12 +7,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 ### 已实现功能
 
 - ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
-- ✅ **模块化组件**: CLI、提示词、Agent 循环独立封装
+- ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-
-- 🔲 **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发
 - 🔲 **会话与上下文保护 (s03)**: JSONL 持久化，ContextGuard
 - 🔲 **通道 (s04)**: CLI/Telegram/飞书实现
 - 🔲 **网关与路由 (s05)**: 多 agent，WebSocket 网关
@@ -48,6 +47,10 @@ your-claw/
 │   │   │   └── __init__.py          # 颜色输出、输入提示
 │   │   ├── prompts/                 # 提示词管理
 │   │   │   └── __init__.py          # 系统提示词
+│   │   ├── tools/                   # 工具组件
+│   │   │   ├── __init__.py          # 工具导出
+│   │   │   ├── schema.py            # TOOLS schema 定义
+│   │   │   └── handlers.py          # 工具处理器
 │   │   └── channels/                # 通道实现 (s04+)
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
@@ -134,15 +137,20 @@ MAX_TOKENS=8096
 
 ```python
 from coder.components.agent import AgentLoop, run_agent_loop
+from coder.components.tools import TOOLS
 
-# 方式1: 快速启动
+# 方式1: 快速启动（无工具）
 run_agent_loop()
 
-# 方式2: 自定义配置
+# 方式2: 快速启动（带工具）
+run_agent_loop(tools=TOOLS)
+
+# 方式3: 自定义配置
 loop = AgentLoop(
     model_id="gpt-4",
     api_key="your-key",
-    system_prompt="You are a code reviewer."
+    system_prompt="You are a code reviewer.",
+    tools=TOOLS,  # 可选：启用工具支持
 )
 loop.run()
 ```
