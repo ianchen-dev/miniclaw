@@ -1,0 +1,148 @@
+[project]
+name = "lowcode-coder-engine"
+version = "0.1.0"
+description = "低代码代码工具助手引擎"
+authors = [{name = "zaki", email = "746753491@qq.com"}]
+maintainers = []
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+dependencies = [
+  "orjson==3.10.15",
+  "loguru==0.7.3",
+  "psutil==7.0.0",
+  "pydantic>=2.10.5",
+  "pydantic-extra-types>=2.10.5",
+  "pydantic-settings==2.8.1",
+  "pyyaml>=6.0.1",
+  "pyjwt==2.7.0",
+  "bcrypt==4.2.1",
+  "annotated-types==0.7.0",
+  "passlib==1.7.4",
+  "argon2-cffi==23.1.0",
+  "email-validator==2.2.0",
+  "snowflake-id==1.0.2",
+  "captcha==0.7.0",
+  "pytz==2025.2",
+  "python-magic==0.4.27",
+  "aiohttp>=3.11.18",
+  "click>=8.1.7",
+  "setuptools>=80.9.0",
+  "typing-extensions>=4.14.0",
+  "contexts>=0.12",
+]
+
+[project.optional-dependencies]
+standard = [
+  "multidict>=6.2.0",
+  "fastapi[standard]==0.115.12",
+  "uvicorn[standard]==0.34.3",
+]
+
+
+[project.scripts]
+# 开发脚本
+setup-dev   = "scripts.dev.setup_dev:main"
+check-dev   = "scripts.dev.check_dev:main"
+format-code = "scripts.dev.format_code:main"
+# 运行脚本
+runserver = "coder.run:main"
+
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["coder", "scripts", "config"]
+
+[tool.uv]
+dev-dependencies = [
+  # 测试
+  "pytest~=8.3.5",
+  "pytest-asyncio~=0.25.3",
+  "pytest-env~=1.1.3",
+  "pytest-benchmark~=4.0.0",
+  "pytest-mock~=3.14.0",
+  # 代码检查和格式化
+  "dotenv-linter==0.6.0",
+  "ruff==0.11.2",
+  "pyright==1.1.391",
+  "pre-commit==4.2.0",
+  "commitizen==4.9.1",
+  # 热更新
+  "reloadium>=1.5.1",
+]
+
+# 配置包索引源
+[[tool.uv.index]]
+name    = "flydiy"
+url     = "https://nexus.flydiysz.cn/repository/pypi-group/simple"
+default = true
+
+# Pyright 配置
+[tool.pyright]
+include = ["extended/**", "coder/**", "manage.py", "scripts/**", "tests/**"]
+exclude = [
+  "**/.ipynb_checkpoints",
+  "**/.pytest_cache",
+  "**/__pycache__",
+  "**/.idea",
+]
+# 类型 stub 路径
+stubPath = "."
+# 额外的类型 stub 路径
+extraPaths = ["."]
+# 校验
+reportImportCycles                  = false
+reportUnusedCallResult              = false
+reportUnusedParameter               = false
+reportArgumentType                  = false
+reportUnnecessaryIsInstance         = false
+reportPossiblyUnboundVariable       = false
+reportIncompatibleMethodOverride    = false
+reportUninitializedInstanceVariable = false
+reportImplicitOverride              = false
+reportMissingImports                = false
+reportMissingTypeStubs              = false
+reportImplicitAbstractClass         = false
+reportUnknownVariableType           = false
+reportGeneralTypeIssues             = false
+reportExplicitAny                   = false
+reportMissingTypeArgument           = false
+reportUnannotatedClassAttribute     = false
+reportUntypedClassDecorator         = false
+reportImplicitStringConcatenation   = false
+reportUnknownParameterType          = false
+reportUnknownArgumentType           = false
+reportUnknownMemberType             = false
+reportMissingParameterType          = false
+reportUnusedFunction                = false
+reportUnusedVariable                = false
+reportAttributeAccessIssue          = false
+reportOptionalMemberAccess          = false
+reportAssignmentType                = false
+reportUnusedImport                  = false
+reportOperatorIssue                 = false
+reportCallIssue                     = false
+reportAny                           = false
+deprecateTypingAliases              = false
+
+# Commitizen 配置
+[tool.commitizen]
+name                     = "cz_conventional_commits"
+version                  = "2.0.0"
+tag_format               = "v$version"
+version_provider         = "pep621"
+update_changelog_on_bump = true
+bump_message             = "bump: 版本从 $current_version 更新到 $new_version"
+# 提交信息模板配置
+[tool.commitizen.customize]
+message_template = "{{change_type}}{{scope}}: {{message}}"
+example = "feat(auth): 添加XXX功能"
+schema = """
+<type>(<scope>): <subject>
+<BLANK LINE>
+<body>
+<BLANK LINE>
+<footer>
+"""
+schema_pattern = "^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\\(.+\\))?: .{1,50}"

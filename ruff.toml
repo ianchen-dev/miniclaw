@@ -1,0 +1,151 @@
+# 基本配置
+line-length = 120
+exclude = [
+  "migrations/*",
+  ".git",
+  ".env",
+  ".venv",
+  "venv",
+  "env",
+  "__pycache__",
+  "*.pyc",
+  "dist",
+  "build",
+]
+respect-gitignore = true
+
+# 代码检查配置
+[lint]
+preview = false
+select = [
+  "B",       # flake8-bugbear rules
+  "C4",      # flake8-comprehensions
+  "E",       # pycodestyle E rules
+  "F",       # pyflakes rules
+  "FURB",    # refurb rules
+  "I",       # isort rules
+  "N",       # pep8-naming
+  "PT",      # flake8-pytest-style rules
+  "PLC0208", # iteration-over-set
+  "PLC0414", # useless-import-alias
+  "PLE0604", # invalid-all-object
+  "PLE0605", # invalid-all-format
+  "PLR0402", # manual-from-import
+  "PLR1711", # useless-return
+  "PLR1714", # repeated-equality-comparison
+  "RUF013",  # implicit-optional
+  "RUF019",  # unnecessary-key-check
+  "RUF100",  # unused-noqa
+  "RUF101",  # redirected-noqa
+  "RUF200",  # invalid-pyproject-toml
+  "S506",    # unsafe-yaml-load
+  "SIM",     # flake8-simplify rules
+  "TRY401",  # verbose-log-message
+  "UP",      # pyupgrade rules
+  "W191",    # tab-indentation
+  "W605",    # invalid-escape-sequence
+  # 安全相关的规则
+  "S102", # exec-builtin, disallow use of `exec`
+  "S307", # suspicious-eval-usage, disallow use of `eval` and `ast.literal_eval`
+  "S301", # suspicious-pickle-usage, disallow use of `pickle` and its wrappers.
+  "S302", # suspicious-marshal-usage, disallow use of `marshal` module
+]
+
+ignore = [
+  "I001",    # unsorted-imports
+  "E402",    # module-import-not-at-top-of-file
+  "E711",    # none-comparison
+  "E712",    # true-false-comparison
+  "E721",    # type-comparison
+  "E722",    # bare-except
+  "F821",    # undefined-name
+  "F841",    # unused-variable
+  "FURB113", # repeated-append
+  "FURB152", # math-constant
+  "UP006",   # 非 PEP585 注解
+  "UP007",   # 非 PEP604 联合注解
+  "UP008",   # 使用参数调用 super()
+  "UP032",   # f-string
+  "UP035",   # 已弃用导入
+  "UP045",   # non-pep604-annotation-optional
+  "B005",    # strip-with-multi-characters
+  "B006",    # mutable-argument-default
+  "B007",    # unused-loop-control-variable
+  "B008",    # 函数调用默认参数
+  "B026",    # star-arg-unpacking-after-keyword-arg
+  "B903",    # class-as-data-structure
+  "B904",    # raise-without-from-inside-except
+  "B905",    # zip-without-explicit-strict
+  "N806",    # non-lowercase-variable-in-function
+  "N815",    # mixed-case-variable-in-class-scope
+  "N818",
+  "PT011",   # pytest-raises-too-broad
+  "SIM102",  # collapsible-if
+  "SIM103",  # needless-bool
+  "SIM105",  # suppressible-exception
+  "SIM107",  # return-in-try-except-finally
+  "SIM108",  # if-else-block-instead-of-if-exp
+  "SIM113",  # enumerate-for-loop
+  "SIM117",  # multiple-with-statements
+  "SIM210",  # if-expr-with-true-false
+  "ERA001",  # 找到注释掉的代码
+  "E501",    # 行太长(这会与格式化冲突)
+  "E203",    # 冒号前有空格(这会与格式化冲突)
+  "D100",    # 缺少模块文档字符串
+  "D101",    # 缺少类文档字符串
+  "D102",    # 缺少函数文档字符串
+  "D103",    # 缺少方法文档字符串
+  "D104",    # 缺少包文档字符串
+  "RUF022",  # unsorted-dunder-all
+  "TRY400",  # error-instead-of-exception
+]
+
+# 针对特定文件的忽略规则
+[lint.per-file-ignores]
+"__init__.py" = [
+  "F401", # unused-import
+  "F811", # redefined-while-unused
+]
+"configs/*" = [
+  "N802", # invalid-function-name
+]
+"libs/gmpy2_pkcs10aep_cipher.py" = [
+  "N803", # invalid-argument-name
+]
+"tests/*" = [
+  "F811", # redefined-while-unused
+]
+
+# pyflakes 配置
+[lint.pyflakes]
+allowed-unused-imports = [
+  "_pytest.monkeypatch",
+  "tests.integration_tests",
+  "tests.unit_tests",
+]
+
+# isort 配置
+[lint.isort]
+known-first-party   = ["coder", "extended", "scripts", "tests"]
+lines-after-imports = 2
+order-by-type       = true
+
+# 代码复杂度设置
+[lint.mccabe]
+max-complexity = 10
+
+# pydocstyle 配置
+[lint.pydocstyle]
+convention = "google"
+
+# pycodestyle 配置
+[lint.pycodestyle]
+max-doc-length = 88
+
+# 格式化配置
+[format]
+line-ending               = "auto"
+quote-style               = "double"
+indent-style              = "space"
+docstring-code-format     = true
+skip-magic-trailing-comma = false

@@ -1,0 +1,29 @@
+repos:
+  # 预提交基础钩子集合
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-merge-conflict # 检查合并冲突标记
+      - id: check-yaml # 检查YAML文件语法
+      - id: check-toml # 检查TOML文件语法
+      - id: check-added-large-files # 防止提交大文件
+        args: ["--maxkb=1024"] # 限制文件大小为1MB
+      - id: detect-private-key # 检测私钥泄露
+        files: \.(py)$
+
+  # Ruff: 快速Python Linter和代码格式化工具
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.2 # 与pyproject.toml中保持一致
+    hooks:
+      - id: ruff # 代码质量检查
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(etl/|scripts/|tests/)
+      - id: ruff-format # 代码格式化
+        files: ^(etl/|scripts/|tests/)
+
+  # Commitizen: 规范化提交信息
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.14.1
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
