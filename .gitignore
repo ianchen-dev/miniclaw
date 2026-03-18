@@ -1,0 +1,126 @@
+# ==========================================
+# Python相关
+# ==========================================
+# Python字节码/优化文件/DLL文件
+**/__pycache__
+*.py[cod]
+*$py.class
+
+# PyBuilder构建工具
+.Python
+.pybuilder/
+target/
+pip-wheel-metadata/
+
+# PyInstaller
+#  通常这些文件由Python脚本从模板生成
+#  在PyInstaller构建exe之前，以便注入日期或其他信息
+*.manifest
+*.spec
+
+# 虚拟环境
+# pyenv环境管理
+.python-version
+# PEP 582; 由github.com/David-OConnor/pyflow等工具使用
+__pypackages__/
+
+
+# ==========================================
+# JavaScript/Node.js相关
+# ==========================================
+# 前端构建物
+.astro/
+dist
+
+# 依赖包
+node_modules
+
+# ==========================================
+# 数据库相关
+# ==========================================
+# Django数据库
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+
+
+# ==========================================
+# 日志和临时文件
+# ==========================================
+# 日志文件
+/logs
+*.log
+
+# 安装日志
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==========================================
+# Web框架
+# ==========================================
+# Django相关:
+# 注: 日志文件已在上面的日志部分列出
+
+# Flask相关:
+instance/
+.webassets-cache
+
+# ==========================================
+# 数据和环境文件
+# ==========================================
+/data
+/public
+.env
+.env.dev
+/out
+/docker/data
+/config/application-local.yml
+
+# ==========================================
+# 开发工具相关
+# ==========================================
+# pyarmor
+.pyarmor/
+# 测试覆盖率
+/coverage
+/.nyc_output
+
+# Jupyter相关
+# Jupyter笔记本
+.ipynb_checkpoints
+# IPython
+profile_default/
+ipython_config.py
+
+# ruff缓存
+.ruff_cache
+
+# IDE配置
+# IDE和编辑器
+/.idea
+
+# VSCode编辑器
+.vscode/*
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/extensions.json
+.vscode/python.code-profile
+
+# Cursor相关
+.cursor/mcp.json
+
+# Claude Code相关
+.claude/settings.local.json
+
+# ==========================================
+# 操作系统相关
+# ==========================================
+# 操作系统文件
+.DS_Store
+
+# pnpm
+/.pnpm-store
+
+# mise
+mise.toml
