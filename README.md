@@ -11,11 +11,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
 - ✅ **通道 (s04)**: InboundMessage 统一格式，Channel ABC，CLI/Telegram/飞书实现
 - ✅ **网关与路由 (s05)**: BindingTable 5层路由，AgentManager 多agent，WebSocket 网关
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关独立封装
+- ✅ **智能层 (s06)**: 8层提示词组装，BootstrapLoader，MemoryStore TF-IDF+MMR搜索
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **智能层 (s06)**: 8层提示词组装，MemoryStore
 - 🔲 **心跳与 Cron (s07)**: Lane 互斥，CronService
 - 🔲 **消息投递 (s08)**: DeliveryQueue 持久化
 - 🔲 **弹性 (s09)**: 重试洋葱，key轮换
@@ -62,6 +62,12 @@ your-claw/
 │   │       ├── agent_manager.py     # AgentManager 多agent管理
 │   │       ├── server.py            # GatewayServer WebSocket网关
 │   │       └── event_loop.py        # 共享事件循环
+│   │   └── intelligence/            # 智能层 (s06)
+│   │       ├── __init__.py          # 智能层组件导出
+│   │       ├── bootstrap.py         # BootstrapLoader 文件加载
+│   │       ├── skills.py            # SkillsManager 技能发现
+│   │       ├── memory.py            # MemoryStore 记忆存储和搜索
+│   │       └── prompt_builder.py    # 8 层提示词组装
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置
@@ -158,13 +164,17 @@ run_agent_loop(tools=TOOLS)
 # 方式3: 快速启动（带工具和会话持久化）
 run_agent_loop(tools=TOOLS, enable_session=True)
 
-# 方式4: 自定义配置
+# 方式4: 快速启动（带智能层）
+run_agent_loop(tools=TOOLS, enable_intelligence=True)
+
+# 方式5: 自定义配置
 loop = AgentLoop(
     model_id="gpt-4",
     api_key="your-key",
     system_prompt="You are a code reviewer.",
     tools=TOOLS,  # 可选：启用工具支持
     enable_session=True,  # 可选：启用会话持久化 (s03)
+    enable_intelligence=True,  # 可选：启用智能层 (s06)
     agent_id="my-agent",  # 可选：Agent 标识符
 )
 loop.run()

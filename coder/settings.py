@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     agents_base_dir: str = "workspace/.agents"  # Agent 配置目录
     max_concurrent_agents: int = 4  # 最大并发 agent 数量
 
+    # 智能层配置 (s06)
+    workspace_dir: str = "workspace"  # 工作区目录
+    max_file_chars: int = 20000  # 单个 Bootstrap 文件最大字符数
+    max_total_chars: int = 150000  # Bootstrap 文件总字符数上限
+    max_skills: int = 150  # 最大技能数量
+    max_skills_prompt: int = 30000  # 技能提示词块最大字符数
+    memory_top_k: int = 5  # 记忆搜索默认返回数量
+    memory_decay_rate: float = 0.01  # 记忆时间衰减率
+    mmr_lambda: float = 0.7  # MMR 重排序的 lambda 参数
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

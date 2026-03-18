@@ -30,35 +30,34 @@ Agent 就是 while True + stop_reason
     # 使用会话持久化 (s03)
     loop = AgentLoop(tools=TOOLS, enable_session=True)
     loop.run()
+
+    # 使用智能层 (s06)
+    loop = AgentLoop(tools=TOOLS, enable_session=True, enable_intelligence=True)
+    loop.run()
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 import litellm
 from litellm import ModelResponse
 
 from coder.settings import settings
-from coder.components.prompts import get_system_prompt
 from coder.components.cli import (
     colored_user,
     print_assistant,
-    print_info,
-    print_error,
     print_banner,
+    print_context_bar,
+    print_error,
     print_goodbye,
+    print_info,
     print_session,
     print_warn,
-    print_context_bar,
 )
+
+# ANSI 颜色代码 (用于直接打印)
+BLUE = "\033[34m"
+RESET = "\033[0m"
 from coder.components.tools import process_tool_call
-
-
-# 工具使用的系统提示词扩展
-TOOL_SYSTEM_PROMPT_EXTENSION = (
-    "You are a helpful AI assistant with access to tools.\n"
-    "Use the tools to help the user with file operations and shell commands.\n"
-    "Always read a file before editing it.\n"
-    "When using edit_file, the old_string must match EXACTLY (including whitespace)."
-)
 
 
 class AgentLoop:
@@ -68,6 +67,7 @@ class AgentLoop:
     管理 messages 状态和 LLM 交互循环
     支持工具调用 (s02)
     支持会话持久化和上下文保护 (s03)
+    支持智能层 8 层提示词组装 (s06)
     """
 
     def __init__(
@@ -80,6 +80,8 @@ class AgentLoop:
         tools: Optional[List[Dict[str, Any]]] = None,
         enable_session: bool = False,
         agent_id: str = "default",
+        enable_intelligence: bool = False,
+        channel: str = "terminal",
     ):
         """
         初始化 Agent 循环
@@ -93,6 +95,8 @@ class AgentLoop:
             tools: 工具schema列表，如果提供则启用工具支持
             enable_session: 是否启用会话持久化 (s03)
             agent_id: Agent 标识符，用于会话存储
+            enable_intelligence: 是否启用智能层 (s06)
+            channel: 通道类型 (terminal/telegram/discord/slack)
         """
         self.model_id = model_id or settings.model_id
         self.api_key = api_key or settings.api_key
@@ -101,13 +105,9 @@ class AgentLoop:
         self.tools = tools
         self.enable_session = enable_session
         self.agent_id = agent_id
-
-        # 如果启用了工具，扩展系统提示词
-        if self.tools:
-            base_prompt = system_prompt or get_system_prompt()
-            self.system_prompt = f"{TOOL_SYSTEM_PROMPT_EXTENSION}\n\n{base_prompt}"
-        else:
-            self.system_prompt = system_prompt or get_system_prompt()
+        self.enable_intelligence = enable_intelligence
+        self.channel = channel
+        self._custom_system_prompt = system_prompt
 
         # 消息历史
         self.messages: List[Dict[str, Any]] = []
@@ -116,21 +116,86 @@ class AgentLoop:
         self._store = None
         self._guard = None
 
+        # 智能层组件 (s06)
+        self._bootstrap_loader = None
+        self._skills_manager = None
+        self._memory_store = None
+        self._bootstrap_data: Dict[str, str] = {}
+        self._skills_block = ""
+
         if self.enable_session:
-            from coder.components.session import SessionStore, ContextGuard
+            from coder.components.session import ContextGuard, SessionStore
 
             self._store = SessionStore(agent_id=self.agent_id)
             self._guard = ContextGuard()
+
+        if self.enable_intelligence:
+            self._init_intelligence()
 
         # 配置 litellm
         if self.api_base_url:
             litellm.api_base = self.api_base_url
 
-    def _build_messages(self) -> List[Dict[str, Any]]:
-        """构建发送给 LLM 的消息列表（包含系统提示词）"""
-        return [{"role": "system", "content": self.system_prompt}] + self.messages
+    def _init_intelligence(self) -> None:
+        """初始化智能层组件"""
+        from coder.components.intelligence import (
+            BootstrapLoader,
+            MemoryStore,
+            SkillsManager,
+        )
 
-    def _call_llm(self) -> Optional[ModelResponse]:
+        self._bootstrap_loader = BootstrapLoader()
+        self._bootstrap_data = self._bootstrap_loader.load_all(mode="full")
+
+        self._skills_manager = SkillsManager()
+        self._skills_manager.discover()
+        self._skills_block = self._skills_manager.format_prompt_block()
+
+        self._memory_store = MemoryStore()
+
+    def _build_system_prompt(self, user_input: str = "") -> str:
+        """
+        构建系统提示词
+
+        如果启用了智能层，使用 8 层组装；否则使用简单模式。
+
+        Args:
+            user_input: 用户输入，用于自动记忆召回
+
+        Returns:
+            系统提示词
+        """
+        if self._custom_system_prompt:
+            return self._custom_system_prompt
+
+        if not self.enable_intelligence:
+            # 简单模式
+            from coder.components.prompts import get_system_prompt
+
+            return get_system_prompt(mode="simple")
+
+        # 智能层模式: 8 层组装
+        from coder.components.intelligence import auto_recall, build_system_prompt
+
+        memory_context = ""
+        if user_input and self._memory_store:
+            memory_context = auto_recall(user_input, self._memory_store)
+
+        return build_system_prompt(
+            mode="full",
+            bootstrap=self._bootstrap_data,
+            skills_block=self._skills_block,
+            memory_context=memory_context,
+            agent_id=self.agent_id,
+            channel=self.channel,
+            model_id=self.model_id,
+        )
+
+    def _build_messages(self, system_prompt: str) -> List[Dict[str, Any]]:
+        """构建发送给 LLM 的消息列表（包含系统提示词）"""
+        return [{"role": "system", "content": system_prompt}] + self.messages
+
+    def _call_llm(self, system_prompt: str) -> Optional[ModelResponse]:
         """调用 LLM API（带上下文保护）"""
         try:
             # 如果启用会话，使用 ContextGuard 保护
@@ -138,7 +203,7 @@ class AgentLoop:
                 return self._guard.guard_api_call(
                     api_key=self.api_key,
                     model=self.model_id,
-                    system=self.system_prompt,
+                    system=system_prompt,
                     messages=self.messages,
                     tools=self.tools,
                     max_tokens=self.max_tokens,
@@ -149,7 +214,7 @@ class AgentLoop:
             kwargs: Dict[str, Any] = {
                 "model": self.model_id,
                 "max_tokens": self.max_tokens,
-                "messages": self._build_messages(),
+                "messages": self._build_messages(system_prompt),
                 "api_key": self.api_key,
                 "stream": False,
             }
@@ -297,9 +362,94 @@ class AgentLoop:
 
         return user_input
 
-    def _handle_repl_command(self, command: str) -> Tuple[bool, bool]:
+    def _handle_intelligence_command(self, command: str) -> Tuple[bool, bool]:
         """
-        处理以 / 开头的 REPL 命令。
+        处理智能层相关的 REPL 命令 (s06)
+
+        Args:
+            command: 用户输入的命令
+
+        Returns:
+            (是否已处理, 是否应该继续循环)
+        """
+        if not self.enable_intelligence:
+            return False, True
+
+        parts = command.strip().split(maxsplit=1)
+        cmd = parts[0].lower()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if cmd == "/soul":
+            print_info("--- SOUL.md ---")
+            soul = self._bootstrap_data.get("SOUL.md", "")
+            print(soul if soul else "(未找到 SOUL.md)")
+            return True, True
+
+        elif cmd == "/skills":
+            print_info("--- 已发现的技能 ---")
+            if not self._skills_manager or not self._skills_manager.skills:
+                print_info("(未找到技能)")
+            else:
+                for s in self._skills_manager.skills:
+                    print(f"  {BLUE}{s['invocation']}{RESET}  {s['name']} - {s['description']}")
+                    print_info(f"    path: {s['path']}")
+            return True, True
+
+        elif cmd == "/memory":
+            print_info("--- 记忆统计 ---")
+            if self._memory_store:
+                stats = self._memory_store.get_stats()
+                print_info(f"  长期记忆 (MEMORY.md): {stats['evergreen_chars']} 字符")
+                print_info(f"  每日文件: {stats['daily_files']}")
+                print_info(f"  每日条目: {stats['daily_entries']}")
+            else:
+                print_info("(记忆存储未初始化)")
+            return True, True
+
+        elif cmd == "/search":
+            if not arg:
+                print_warn("  用法: /search <query>")
+                return True, True
+            print_info(f"--- 记忆搜索: {arg} ---")
+            if self._memory_store:
+                results = self._memory_store.hybrid_search(arg)
+                if not results:
+                    print_info("(无结果)")
+                else:
+                    for r in results:
+                        print_info(f"  [{r['score']:.4f}] {r['path']}")
+                        print_info(f"    {r['snippet']}")
+            else:
+                print_info("(记忆存储未初始化)")
+            return True, True
+
+        elif cmd == "/prompt":
+            print_info("--- 完整系统提示词 ---")
+            prompt = self._build_system_prompt("show prompt")
+            if len(prompt) > 3000:
+                print(prompt[:3000])
+                print_info(f"\n... ({len(prompt) - 3000} more chars, total {len(prompt)})")
+            else:
+                print(prompt)
+            print_info(f"\n提示词总长度: {len(prompt)} 字符")
+            return True, True
+
+        elif cmd == "/bootstrap":
+            print_info("--- Bootstrap 文件 ---")
+            if not self._bootstrap_data:
+                print_info("(未加载 Bootstrap 文件)")
+            else:
+                for name, content in self._bootstrap_data.items():
+                    print(f"  {BLUE}{name}{RESET}: {len(content)} chars")
+            total = sum(len(v) for v in self._bootstrap_data.values())
+            print_info(f"\n  总计: {total} 字符 (上限: {settings.max_total_chars})")
+            return True, True
+
+        return False, True
+
+    def _handle_session_command(self, command: str) -> Tuple[bool, bool]:
+        """
+        处理会话相关的 REPL 命令 (s03)
 
         Args:
             command: 用户输入的命令
@@ -308,8 +458,7 @@ class AgentLoop:
             (是否已处理, 是否应该继续循环)
         """
         if not self._store or not self._guard:
-            print_warn("  REPL commands require session support. Enable with enable_session=True")
-            return True, True
+            return False, True
 
         parts = command.strip().split(maxsplit=1)
         cmd = parts[0].lower()
@@ -368,22 +517,60 @@ class AgentLoop:
                 return True, True
             print_session("  Compacting history...")
             old_count = len(self.messages)
-            self.messages = self._guard.compact_history(self.messages, self.api_key, self.model_id, self.api_base_url)
+            self.messages = self._guard.compact_history(
+                self.messages, self.api_key, self.model_id, self.api_base_url
+            )
             print_session(f"  {old_count} -> {len(self.messages)} messages")
             return True, True
 
-        elif cmd == "/help":
+        return False, True
+
+    def _handle_repl_command(self, command: str) -> Tuple[bool, bool]:
+        """
+        处理以 / 开头的 REPL 命令。
+
+        Args:
+            command: 用户输入的命令
+
+        Returns:
+            (是否已处理, 是否应该继续循环)
+        """
+        parts = command.strip().split(maxsplit=1)
+        cmd = parts[0].lower()
+
+        # 帮助命令
+        if cmd == "/help":
             print_info("  Commands:")
-            print_info("    /new [label]       Create a new session")
-            print_info("    /list              List all sessions")
-            print_info("    /switch <id>       Switch to a session (prefix match)")
-            print_info("    /context           Show context token usage")
-            print_info("    /compact           Manually compact conversation history")
+            if self.enable_session:
+                print_info("    /new [label]       Create a new session")
+                print_info("    /list              List all sessions")
+                print_info("    /switch <id>       Switch to a session (prefix match)")
+                print_info("    /context           Show context token usage")
+                print_info("    /compact           Manually compact conversation history")
+            if self.enable_intelligence:
+                print_info("    /soul              Show SOUL.md content")
+                print_info("    /skills            List discovered skills")
+                print_info("    /memory            Show memory statistics")
+                print_info("    /search <query>    Search memories")
+                print_info("    /prompt            Show full system prompt")
+                print_info("    /bootstrap         Show loaded bootstrap files")
             print_info("    /help              Show this help")
             print_info("    quit / exit        Exit the REPL")
             return True, True
 
-        return False, True
+        # 先尝试智能层命令
+        handled, should_continue = self._handle_intelligence_command(command)
+        if handled:
+            return handled, should_continue
+
+        # 再尝试会话命令
+        handled, should_continue = self._handle_session_command(command)
+        if handled:
+            return handled, should_continue
+
+        # 未知命令
+        print_warn(f"  Unknown command: {cmd}")
+        return True, True
 
     def _init_session(self) -> None:
         """初始化会话：恢复最近的会话或创建新会话"""
@@ -421,7 +608,18 @@ class AgentLoop:
 
             extra_info = f"Tools: {', '.join(TOOL_HANDLERS.keys())}"
 
-        if self.enable_session:
+        # 确定章节标题
+        if self.enable_intelligence:
+            section = "Section 06: 智能层"
+            if self._skills_manager:
+                extra_info = f"Skills: {len(self._skills_manager.skills)}" + (
+                    f" | {extra_info}" if extra_info else ""
+                )
+            if self._memory_store:
+                stats = self._memory_store.get_stats()
+                mem_info = f"Memory: {stats['daily_entries']} entries"
+                extra_info = f"{mem_info}" + (f" | {extra_info}" if extra_info else "")
+        elif self.enable_session:
             section = "Section 03: 会话与上下文保护"
             if extra_info:
                 extra_info = f"Session: {self._store.current_session_id} | {extra_info}"
@@ -434,7 +632,7 @@ class AgentLoop:
 
         print_banner(f"your-claw | {section}", self.model_id, extra_info=extra_info)
 
-        if self.enable_session:
+        if self.enable_session or self.enable_intelligence:
             print_info("  Type /help for commands, quit/exit to leave.")
             print()
 
@@ -446,11 +644,23 @@ class AgentLoop:
             if not user_input:
                 continue
 
-            # REPL 命令处理 (s03)
+            # REPL 命令处理
             if user_input.startswith("/"):
                 handled, _ = self._handle_repl_command(user_input)
                 if handled:
                     continue
+
+            # 自动记忆召回 (s06)
+            memory_context = ""
+            if self.enable_intelligence and self._memory_store:
+                from coder.components.intelligence import auto_recall
+
+                memory_context = auto_recall(user_input, self._memory_store)
+                if memory_context:
+                    print_info("  [自动召回] 找到相关记忆")
+
+            # 构建系统提示词 (每轮重建，因为记忆可能被更新)
+            system_prompt = self._build_system_prompt(user_input)
 
             # 追加到历史
             self.messages.append(
@@ -468,7 +678,7 @@ class AgentLoop:
             # 模型可能连续调用多个工具才最终给出文本回复
             while True:
                 # 调用 LLM
-                response = self._call_llm()
+                response = self._call_llm(system_prompt)
                 if response is None:
                     # API 错误，回滚消息到最近的 user 消息
                     while self.messages and self.messages[-1]["role"] != "user":
@@ -487,6 +697,7 @@ def run_agent_loop(
     tools: Optional[List[Dict[str, Any]]] = None,
     enable_session: bool = False,
     agent_id: str = "default",
+    enable_intelligence: bool = False,
 ) -> None:
     """
     便捷函数：运行 Agent 循环
@@ -495,6 +706,12 @@ def run_agent_loop(
         tools: 工具schema列表，如果提供则启用工具支持
         enable_session: 是否启用会话持久化 (s03)
         agent_id: Agent 标识符，用于会话存储
+        enable_intelligence: 是否启用智能层 (s06)
     """
-    loop = AgentLoop(tools=tools, enable_session=enable_session, agent_id=agent_id)
+    loop = AgentLoop(
+        tools=tools,
+        enable_session=enable_session,
+        agent_id=agent_id,
+        enable_intelligence=enable_intelligence,
+    )
     loop.run()

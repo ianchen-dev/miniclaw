@@ -14,11 +14,16 @@ Anthropic API 工具格式:
             "required": [...]
         }
     }
+
+工具分组:
+    - 基础工具 (s02): bash, read_file, write_file, edit_file
+    - 记忆工具 (s06): memory_write, memory_search
 """
 
 from typing import List, Dict, Any
 
-TOOLS: List[Dict[str, Any]] = [
+# 基础工具 (s02)
+BASE_TOOLS: List[Dict[str, Any]] = [
     {
         "name": "bash",
         "description": (
@@ -99,5 +104,51 @@ TOOLS: List[Dict[str, Any]] = [
     },
 ]
 
+# 记忆工具 (s06)
+MEMORY_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "memory_write",
+        "description": (
+            "Save an important fact or observation to long-term memory. "
+            "Use when you learn something worth remembering about the user or context."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "The fact or observation to remember.",
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Category: preference, fact, context, etc.",
+                },
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "memory_search",
+        "description": "Search stored memories for relevant information, ranked by similarity.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Max results. Default: 5.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+]
 
-__all__ = ["TOOLS"]
+# 完整工具列表 (基础 + 记忆)
+TOOLS: List[Dict[str, Any]] = BASE_TOOLS + MEMORY_TOOLS
+
+
+__all__ = ["TOOLS", "BASE_TOOLS", "MEMORY_TOOLS"]
