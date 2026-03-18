@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     heartbeat_max_queue_size: int = 10  # 心跳输出队列最大大小
     cron_auto_disable_threshold: int = 5  # Cron 任务连续错误自动禁用阈值
 
+    # 消息投递配置 (s08)
+    delivery_queue_dir: str = ""  # 投递队列目录，空则使用 workspace/.delivery-queue
+    delivery_max_retries: int = 5  # 最大重试次数
+    delivery_verbose: bool = True  # 是否打印投递详细信息
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

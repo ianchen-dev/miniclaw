@@ -96,6 +96,11 @@ def print_cron(text: str) -> None:
     print(f"{MAGENTA}{BOLD}[cron]{RESET} {text}")
 
 
+def print_delivery(text: str) -> None:
+    """打印消息投递相关文本（蓝色）"""
+    print(f"{BLUE}[delivery]{RESET} {text}")
+
+
 __all__ = [
     "CYAN",
     "GREEN",
@@ -119,4 +124,5 @@ __all__ = [
     "print_context_bar",
     "print_heartbeat",
     "print_cron",
+    "print_delivery",
 ]

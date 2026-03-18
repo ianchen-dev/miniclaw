@@ -13,11 +13,11 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **网关与路由 (s05)**: BindingTable 5层路由，AgentManager 多agent，WebSocket 网关
 - ✅ **智能层 (s06)**: 8层提示词组装，BootstrapLoader，MemoryStore TF-IDF+MMR搜索
 - ✅ **心跳与 Cron (s07)**: Lane 互斥，HeartbeatRunner，CronService 3种调度
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器独立封装
+- ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ### 规划中功能
-- 🔲 **消息投递 (s08)**: DeliveryQueue 持久化
 - 🔲 **弹性 (s09)**: 重试洋葱，key轮换
 - 🔲 **并发 (s10)**: LaneQueue，CommandQueue
 
@@ -72,6 +72,10 @@ your-claw/
 │   │       ├── __init__.py          # 调度器组件导出
 │   │       ├── heartbeat.py         # HeartbeatRunner 心跳运行器
 │   │       └── cron.py              # CronService 定时任务服务
+│   │   └── delivery/                # 消息投递 (s08)
+│   │       ├── __init__.py          # 投递组件导出
+│   │       ├── queue.py             # DeliveryQueue 持久化队列
+│   │       └── runner.py            # DeliveryRunner 后台投递线程
 │   ├── middleware/                  # 中间件
 │   ├── controllers/                 # API 控制器
 │   ├── application.py               # FastAPI 应用配置
