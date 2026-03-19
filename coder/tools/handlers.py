@@ -9,9 +9,10 @@
     - 危险命令过滤
 """
 
+import json
 import subprocess
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Union
 
 from coder.cli import print_tool
 from coder.intelligence.memory import MemoryStore
@@ -277,7 +278,7 @@ TOOL_HANDLERS: Dict[str, Callable[..., str]] = {
 # ---------------------------------------------------------------------------
 
 
-def process_tool_call(tool_name: str, tool_input: Dict[str, Any]) -> str:
+def process_tool_call(tool_name: str, tool_input: Union[Dict[str, Any], str]) -> str:
     """
     根据工具名分发到对应的处理函数。
     这就是整个 "agent" 的核心调度逻辑。
@@ -286,7 +287,7 @@ def process_tool_call(tool_name: str, tool_input: Dict[str, Any]) -> str:
 
     Args:
         tool_name: 工具名称
-        tool_input: 工具输入参数
+        tool_input: 工具输入参数 (字典或 JSON 字符串)
 
     Returns:
         工具执行结果或错误信息
@@ -294,6 +295,16 @@ def process_tool_call(tool_name: str, tool_input: Dict[str, Any]) -> str:
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
         return f"Error: Unknown tool '{tool_name}'"
+
+    # 处理 tool_input 可能是字符串的情况 (某些 API 返回 JSON 字符串)
+    if isinstance(tool_input, str):
+        try:
+            tool_input = json.loads(tool_input)
+        except json.JSONDecodeError as exc:
+            return f"Error: Failed to parse tool_input as JSON: {exc}"
+        if not isinstance(tool_input, dict):
+            return f"Error: tool_input must be a JSON object, got {type(tool_input).__name__}"
+
     try:
         return handler(**tool_input)
     except TypeError as exc:
