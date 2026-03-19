@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 
 
 _logger.info(
-    f"\n🚀 Lowcode-Coder-Engine 应用开始启动... ({datetime.now(tz=ChinaTimeZone).strftime('%Y-%m-%d %H:%M:%S')})"
+    f"\n[START] Lowcode-Coder-Engine 应用开始启动... ({datetime.now(tz=ChinaTimeZone).strftime('%Y-%m-%d %H:%M:%S')})"
 )
 
 from http import HTTPStatus
@@ -207,14 +207,14 @@ async def lifespan(_app: FastAPI):
         "\n"
         + "=" * 60
         + "\n"
-        + "🎉 Lowcode-Coder-Engine 应用启动完成！"
+        + "[OK] Lowcode-Coder-Engine 应用启动完成！"
         + "\n"
-        + f"📊 启动耗时: {startup_duration:.3f} 秒"
+        + f"[TIME] 启动耗时: {startup_duration:.3f} 秒"
         + "\n"
-        + f"⏰ 完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        + f"[DONE] 完成时间: {completion_time.strftime('%Y-%m-%d %H:%M:%S')}"
         + "\n"
-        + f"🔗 访问地址: http://127.0.0.1:{settings.port}\n"
-        + f"🔗 API文档: http://127.0.0.1:{settings.port}/docs\n"
+        + f"[URL] 访问地址: http://127.0.0.1:{settings.port}\n"
+        + f"[DOCS] API文档: http://127.0.0.1:{settings.port}/docs\n"
         + "\n"
         + "=" * 60
         + "\n",
@@ -289,7 +289,7 @@ async def health() -> ORJSONResponse:
     )
 
 
-_logger.info("🚀 before api_router...")
+_logger.info("[LOAD] before api_router...")
 
 
 # 加载路由
@@ -307,7 +307,7 @@ from coder.controllers import api_router
 
 app.include_router(api_router, prefix="/api")
 
-_logger.info("🚀 after api_router...")
+_logger.info("[LOAD] after api_router...")
 
 
 # app.include_router(api_router, prefix="/api")
