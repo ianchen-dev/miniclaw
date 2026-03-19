@@ -16,7 +16,7 @@ Tools 组件 - 工具定义与处理器
 用法:
     from coder.tools import TOOLS, TOOL_HANDLERS, process_tool_call
 
-    # 获取工具 schema 传给 LLM
+    # 获取工具 schema 传给 LLM (OpenAI format)
     response = litellm.completion(..., tools=TOOLS)
 
     # 分发工具调用
