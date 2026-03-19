@@ -127,3 +127,6 @@ mise.toml
 
 # docs
 docs/not-committed
+
+# workspace
+/workspace

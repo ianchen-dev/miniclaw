@@ -214,39 +214,6 @@ curl http://127.0.0.1:8000/actuator/health
 
 ## 开发指南
 
-### 应用架构
-
-项目采用**模块化架构设计**，遵循 FastAPI 最佳实践：
-
-- **应用层**: FastAPI 应用配置、中间件和路由管理
-- **业务层**: 控制器、服务和业务逻辑实现
-- **工具层**: 公共工具、扩展和配置管理
-
-### 添加新功能
-
-#### 1. 创建新的路由控制器
-
-```python
-# coder/controllers/my_controller.py
-from fastapi import APIRouter
-from extended.fastapi.responses import ORJSONResponse
-
-router = APIRouter(prefix="/api/v1/my", tags=["我的功能"])
-
-@router.get("/")
-async def get_my_data() -> ORJSONResponse:
-    return ORJSONResponse({"message": "Hello World"})
-```
-
-#### 2. 注册路由到应用
-
-```python
-# coder/application.py
-from coder.controllers.my_controller import router as my_router
-
-app.include_router(my_router)
-```
-
 ### 配置管理
 
 在 `coder/settings.py` 中添加新配置：
@@ -261,31 +228,13 @@ class Settings(BaseSettings):
         env_file = ".env"
 ```
 
-### 中间件开发
-
-```python
-# coder/middleware/my_middleware.py
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class MyMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # 请求预处理
-        response = await call_next(request)
-        # 响应后处理
-        return response
-```
-
 ## 技术栈
 
-- **Web 框架**: FastAPI 0.115.12 with standard extras
 - **LLM 调用**: LiteLLM (支持多种模型)
-- **配置管理**: Pydantic Settings 2.8.1
 - **依赖管理**: UV
 - **类型检查**: Pyright 1.1.391
 - **代码质量**: Ruff 0.11.2, Pre-commit 4.2.0
 - **测试框架**: Pytest 8.3.5
-- **服务器**: Uvicorn 0.34.3
 
 ## 开发命令
 
@@ -294,10 +243,6 @@ class MyMiddleware(BaseHTTPMiddleware):
 uv run setup-dev      # 设置开发环境和 pre-commit hooks
 uv run check-dev      # 检查开发环境状态
 uv run format-code    # 格式化和检查代码
-
-# 运行应用
-python manage.py runserver  # 启动开发服务器
-uv run runserver           # 或使用 UV 脚本启动
 
 # 代码质量
 uv run pre-commit run --all-files  # 手动运行所有检查
@@ -308,16 +253,6 @@ uv run cz commit                   # 规范化提交
 
 ### 开发环境问题
 
-**UV 未安装**
-
-```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
 **Pre-commit hooks 未生效**
 
 ```bash
@@ -327,28 +262,6 @@ uv run pre-commit install --hook-type commit-msg
 
 # 手动运行检查
 uv run pre-commit run --all-files
-```
-
-### 服务问题
-
-**端口被占用**
-
-```bash
-# 检查端口占用
-lsof -i :8000
-
-# 修改端口配置
-echo "PORT=8001" >> .env
-```
-
-**应用启动失败**
-
-```bash
-# 检查日志文件
-tail -f logs/app.log
-
-# 检查配置
-uv run check-dev
 ```
 
 ### 开发问题
