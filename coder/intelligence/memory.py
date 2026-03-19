@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from coder.common.path import EVERGREEN_MEMORY_PATH, MEMORY_DIR, WORKSPACE_DIR
 from coder.settings import settings
 
 
@@ -46,14 +47,10 @@ class MemoryStore:
         初始化记忆存储
 
         Args:
-            workspace_dir: 工作区目录, 默认从配置读取
+            workspace_dir: 工作区目录, 默认使用 WORKSPACE_DIR
         """
-        if workspace_dir is None:
-            self.workspace_dir = Path(settings.workspace_dir)
-        else:
-            self.workspace_dir = workspace_dir
-
-        self.memory_dir = self.workspace_dir / "memory" / "daily"
+        self.workspace_dir = workspace_dir or WORKSPACE_DIR
+        self.memory_dir = MEMORY_DIR if workspace_dir is None else workspace_dir / "memory" / "daily"
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
         # 从配置读取参数
@@ -94,7 +91,7 @@ class MemoryStore:
         Returns:
             长期记忆内容
         """
-        path = self.workspace_dir / "MEMORY.md"
+        path = EVERGREEN_MEMORY_PATH if self.workspace_dir == WORKSPACE_DIR else self.workspace_dir / "MEMORY.md"
         if not path.is_file():
             return ""
         try:
