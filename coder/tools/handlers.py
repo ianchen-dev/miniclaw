@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict
 
 from coder.cli import print_tool
+from coder.intelligence.memory import MemoryStore
 from coder.settings import settings
 
 
@@ -22,6 +23,17 @@ MAX_TOOL_OUTPUT = getattr(settings, "max_tool_output", 50000)
 
 # 工作目录 -- 所有文件操作相对于此目录，防止路径穿越
 WORKDIR = Path.cwd()
+
+# 记忆存储实例 (单例)
+_memory_store: MemoryStore | None = None
+
+
+def get_memory_store() -> MemoryStore:
+    """获取记忆存储单例实例"""
+    global _memory_store
+    if _memory_store is None:
+        _memory_store = MemoryStore(workspace_dir=WORKDIR)
+    return _memory_store
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +211,53 @@ def tool_edit_file(file_path: str, old_string: str, new_string: str) -> str:
         return f"Error: {exc}"
 
 
+def tool_memory_write(content: str, category: str = "general") -> str:
+    """
+    保存重要信息到长期记忆。
+
+    Args:
+        content: 要记住的事实或观察
+        category: 分类 (preference, fact, context 等)
+
+    Returns:
+        操作结果信息
+    """
+    print_tool("memory_write", f"{len(content)} chars")
+    try:
+        store = get_memory_store()
+        result = store.write_memory(content, category=category)
+        return result
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+def tool_memory_search(query: str, top_k: int = 5) -> str:
+    """
+    搜索存储的记忆。
+
+    使用混合搜索: TF-IDF + 向量 + 时间衰减 + MMR 重排序。
+
+    Args:
+        query: 搜索关键词
+        top_k: 返回结果数量上限
+
+    Returns:
+        匹配的记忆条目
+    """
+    print_tool("memory_search", query)
+    try:
+        store = get_memory_store()
+        results = store.hybrid_search(query, top_k=top_k)
+        if not results:
+            return f"No matches for '{query}'."
+        lines = []
+        for r in results:
+            lines.append(f"[{r['path']}] (score: {r['score']})\n{r['snippet']}")
+        return "\n\n".join(lines)
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
 # ---------------------------------------------------------------------------
 # 工具调度表
 # ---------------------------------------------------------------------------
@@ -208,6 +267,8 @@ TOOL_HANDLERS: Dict[str, Callable[..., str]] = {
     "read_file": tool_read_file,
     "write_file": tool_write_file,
     "edit_file": tool_edit_file,
+    "memory_write": tool_memory_write,
+    "memory_search": tool_memory_search,
 }
 
 
@@ -244,12 +305,15 @@ def process_tool_call(tool_name: str, tool_input: Dict[str, Any]) -> str:
 __all__ = [
     "MAX_TOOL_OUTPUT",
     "WORKDIR",
+    "get_memory_store",
     "safe_path",
     "truncate",
     "tool_bash",
     "tool_read_file",
     "tool_write_file",
     "tool_edit_file",
+    "tool_memory_write",
+    "tool_memory_search",
     "TOOL_HANDLERS",
     "process_tool_call",
 ]
