@@ -24,7 +24,7 @@ from coder.settings import settings
 
 class MemoryStore:
     """
-    记忆存储和搜索
+    记忆存储和搜索类
 
     实现双层存储和混合搜索管道。
 

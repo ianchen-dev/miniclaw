@@ -23,7 +23,7 @@ from coder.settings import settings
 MAX_TOOL_OUTPUT = getattr(settings, "max_tool_output", 50000)
 
 # 工作目录 -- 所有文件操作相对于此目录，防止路径穿越
-WORKDIR = Path.cwd()
+WORKDIR = Path.cwd() / "workspace"
 
 # 记忆存储实例 (单例)
 _memory_store: MemoryStore | None = None
