@@ -90,131 +90,22 @@ cd fastapi-scaffold
 
 ```bash
 # 使用UV创建虚拟环境
-uv venv --python 3.11
-
 # 激活虚拟环境
-source ./.venv/bin/activate
-
 # 安装依赖和设置开发环境
 uv run setup-dev
 ```
 
-#### 3. 启动开发服务器
+#### 3. 配置环境变量
+
+见 .env.example 文件，根据需要创建并配置 `.env` 文件。
+
+#### 4. 启动CLI
 
 ```bash
-# 使用管理脚本启动
-python manage.py runserver
-
-# 或者使用UV脚本
-uv run runserver
+uv run miniclaw
 ```
 
-访问 <http://127.0.0.1:8000> 查看应用。
-
-### 配置文件
-
-创建 `.env` 文件进行环境配置（从 `.env.example` 复制）：
-
-```env
-# ===========================================
-# 日志配置
-# ===========================================
-# Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
-LOG_LEVEL=INFO
-
-# ===========================================
-# Agent 配置 (s01)
-# ===========================================
-# API密钥 (必填)
-API_KEY=your-api-key-here
-# 模型ID (默认: claude-sonnet-4-20250514)
-MODEL_ID=claude-sonnet-4-20250514
-# API基础URL (可选，用于自定义端点或代理)
-API_BASE_URL=
-# 最大token数 (默认: 8096)
-MAX_TOKENS=8096
-
-# ===========================================
-# 会话配置 (s03)
-# ===========================================
-# 上下文安全限制 (tokens)
-CONTEXT_SAFE_LIMIT=180000
-# 会话存储目录
-SESSION_WORKSPACE=workspace/.sessions
-
-# ===========================================
-# 通道配置 (s04)
-# ===========================================
-# Telegram Bot 配置
-# TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-# TELEGRAM_ALLOWED_CHATS=12345,67890    (可选白名单，逗号分隔的聊天ID)
-
-# 飞书/Lark 配置
-# FEISHU_APP_ID=cli_xxxxx
-# FEISHU_APP_SECRET=xxxxx
-# FEISHU_ENCRYPT_KEY=                    (可选，事件订阅加密key)
-# FEISHU_BOT_OPEN_ID=                    (可选，用于群聊@检测)
-# FEISHU_IS_LARK=False                   (True 表示使用 Lark 国际版)
-
-# ===========================================
-# 网关配置 (s05)
-# ===========================================
-# 是否启用 WebSocket 网关
-GATEWAY_ENABLED=False
-# 网关监听地址
-GATEWAY_HOST=localhost
-# 网关监听端口
-GATEWAY_PORT=8765
-# Agent 配置目录
-AGENTS_BASE_DIR=workspace/.agents
-# 最大并发 agent 数量
-MAX_CONCURRENT_AGENTS=4
-
-# ===========================================
-# 智能层配置 (s06)
-# ===========================================
-# 工作区目录
-WORKSPACE_DIR=workspace
-# 单个 Bootstrap 文件最大字符数
-MAX_FILE_CHARS=20000
-# Bootstrap 文件总字符数上限
-MAX_TOTAL_CHARS=150000
-# 最大技能数量
-MAX_SKILLS=150
-# 技能提示词块最大字符数
-MAX_SKILLS_PROMPT=30000
-# 记忆搜索默认返回数量
-MEMORY_TOP_K=5
-# 记忆时间衰减率
-MEMORY_DECAY_RATE=0.01
-# MMR 重排序的 lambda 参数
-MMR_LAMBDA=0.7
-
-# ===========================================
-# 心跳与 Cron 配置 (s07)
-# ===========================================
-# 心跳间隔 (秒)
-HEARTBEAT_INTERVAL=1800
-# 心跳活跃开始时间 (小时, 0-23)
-HEARTBEAT_ACTIVE_START=9
-# 心跳活跃结束时间 (小时, 0-23)
-HEARTBEAT_ACTIVE_END=22
-# 心跳输出队列最大大小
-HEARTBEAT_MAX_QUEUE_SIZE=10
-# Cron 任务连续错误自动禁用阈值
-CRON_AUTO_DISABLE_THRESHOLD=5
-
-# ===========================================
-# 弹性配置 (s09)
-# ===========================================
-# 备选模型链，逗号分隔 (当主模型失败时尝试)
-# RESILIENCE_FALLBACK_MODELS=claude-haiku-4-20250514,gpt-4o-mini
-RESILIENCE_FALLBACK_MODELS=
-# 最大溢出压缩尝试次数
-RESILIENCE_MAX_OVERFLOW_COMPACTION=3
-```
-
-### 运行 Agent
+### 自定义运行 Agent
 
 ```python
 from coder.agent import AgentLoop, run_agent_loop
@@ -244,46 +135,6 @@ loop = AgentLoop(
 )
 loop.run()
 ```
-
-### 健康检查
-
-应用启动后，可以通过健康检查端点验证服务状态：
-
-```bash
-curl http://127.0.0.1:8000/actuator/health
-```
-
-**响应示例：**
-
-```json
-{
-  "status": "UP"
-}
-```
-
-## 开发指南
-
-### 配置管理
-
-在 `coder/settings.py` 中添加新配置：
-
-```python
-class Settings(BaseSettings):
-    # 新增配置项
-    my_feature_enabled: bool = False
-    my_api_key: str = ""
-
-    class Config:
-        env_file = ".env"
-```
-
-## 技术栈
-
-- **LLM 调用**: LiteLLM (支持多种模型)
-- **依赖管理**: UV
-- **类型检查**: Pyright 1.1.391
-- **代码质量**: Ruff 0.11.2, Pre-commit 4.2.0
-- **测试框架**: Pytest 8.3.5
 
 ## 开发命令
 
