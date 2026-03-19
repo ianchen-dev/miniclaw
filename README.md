@@ -19,25 +19,6 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 - ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
-your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建，将教程代码工程化实现。
-
-## ✨ 特色功能
-
-### 已实现功能
-
-- ✅ **Agent 循环 (s01)**: while True + stop_reason 核心循环，messages[] 状态管理
-- ✅ **工具使用 (s02)**: TOOLS schema + TOOL_HANDLERS 分发，内层工具调用循环
-- ✅ **会话与上下文保护 (s03)**: JSONL 持久化，SessionStore，ContextGuard 3阶段溢出重试
-- ✅ **通道 (s04)**: InboundMessage 统一格式，Channel ABC，CLI/Telegram/飞书实现
-- ✅ **网关与路由 (s05)**: BindingTable 5层路由，AgentManager 多agent，WebSocket 网关
-- ✅ **智能层 (s06)**: 8层提示词组装，BootstrapLoader，MemoryStore TF-IDF+MMR搜索
-- ✅ **心跳与 Cron (s07)**: Lane 互斥，HeartbeatRunner，CronService 3种调度
-- ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
-- ✅ **弹性 (s09)**: 3层重试洋葱，AuthProfile key轮换，备选模型链
-- ✅ **并发 (s10)**: LaneQueue 命名lane，CommandQueue 调度器，Generation 追踪
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发独立封装
-- ✅ **类型安全配置**: Pydantic Settings 配置管理
-
 ### 规划中功能
 
 ### 架构特色
@@ -187,8 +168,8 @@ MAX_TOKENS=8096
 ### 运行 Agent
 
 ```python
-from coder.components.agent import AgentLoop, run_agent_loop
-from coder.components.tools import TOOLS
+from coder.agent import AgentLoop, run_agent_loop
+from coder.tools import TOOLS
 
 # 方式1: 快速启动（无工具）
 run_agent_loop()
@@ -206,7 +187,7 @@ run_agent_loop(tools=TOOLS, enable_intelligence=True)
 loop = AgentLoop(
     model_id="gpt-4",
     api_key="your-key",
-    system_prompt="You are a code reviewer.",
+    system_prompt="You ae a code reviewer.",
     tools=TOOLS,  # 可选：启用工具支持
     enable_session=True,  # 可选：启用会话持久化 (s03)
     enable_intelligence=True,  # 可选：启用智能层 (s06)
