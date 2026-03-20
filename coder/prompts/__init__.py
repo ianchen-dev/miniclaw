@@ -29,6 +29,8 @@ s06 扩展为 8 层动态组装。
     )
 """
 
+from typing import Dict, Optional
+
 # 默认系统提示词
 DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant. Answer questions directly."
 
