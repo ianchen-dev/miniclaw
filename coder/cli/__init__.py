@@ -9,12 +9,13 @@ CYAN = "\033[36m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
-DIM = "\033[2m"
-RESET = "\033[0m"
-BOLD = "\033[1m"
 MAGENTA = "\033[35m"
 BLUE = "\033[34m"
 ORANGE = "\033[38;5;208m"
+
+DIM = "\033[2m"
+RESET = "\033[0m"
+BOLD = "\033[1m"
 
 
 def colored_user() -> str:
@@ -81,7 +82,14 @@ def print_context_bar(estimated: int, max_tokens: int) -> None:
     bar_len = 30
     filled = int(bar_len * min(pct, 100) / 100)
     bar = "#" * filled + "-" * (bar_len - filled)
-    color = GREEN if pct < 50 else (YELLOW if pct < 80 else RED)
+
+    if pct < 50:
+        color = GREEN
+    elif pct < 80:
+        color = YELLOW
+    else:
+        color = RED
+
     print_info(f"  Context usage: ~{estimated:,} / {max_tokens:,} tokens")
     print(f"  {color}[{bar}] {pct:.1f}%{RESET}")
 
@@ -143,9 +151,7 @@ def print_lanes_stats(stats: dict) -> None:
         active = st["active"]
         max_c = st["max_concurrency"]
         active_bar = "*" * active + "." * (max_c - active)
-        print_info(
-            f"  {name:12s}  active=[{active_bar}]  queued={st['queue_depth']}  max={max_c}  gen={st['generation']}"
-        )
+        print_info(f"  {name:12s}  active=[{active_bar}]  queued={st['queue_depth']}  max={max_c}  gen={st['generation']}")
 
 
 def print_queue_status(stats: dict) -> None:
