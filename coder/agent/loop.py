@@ -813,7 +813,7 @@ class AgentLoop:
         else:
             section = "Section 01: Agent 循环"
 
-        print_banner(f"your-claw | {section}", self.model_id, extra_info=extra_info)
+        print_banner(f"Miniclaw | {section}", self.model_id, extra_info=extra_info)
 
         if self.enable_session or self.enable_intelligence or self.enable_scheduler:
             print_info("  Type /help for commands, quit/exit to leave.")

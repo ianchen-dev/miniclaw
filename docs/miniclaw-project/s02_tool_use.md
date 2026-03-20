@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     max_tool_output: int = 50000  # 工具输出最大字符数
 ```
 
-### 2. CLI 组件扩展 (coder/components/cli/__init__.py)
+### 2. CLI 组件扩展 (coder/components/cli/**init**.py)
 
 新增工具调用输出函数:
 
@@ -284,7 +284,7 @@ python -c "from coder.components.agent import run_agent_loop; from coder.compone
 
 # 让它创建和编辑文件
 # You > 创建一个名为 hello.txt 的文件, 内容是 "Hello World"
-# You > 把 hello.txt 中的 "World" 改成 "your-claw"
+# You > 把 hello.txt 中的 "World" 改成 "Miniclaw"
 
 # 观察它链式调用工具 (读取 -> 编辑 -> 验证)
 # You > 在 hello.txt 顶部添加一行注释

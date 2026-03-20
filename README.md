@@ -1,6 +1,6 @@
-# your-claw
+# Miniclaw
 
-your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建，将教程代码工程化实现。
+Miniclaw 是一个模块化的 AI Agent 框架
 
 ## ✨ 特色功能
 
@@ -22,7 +22,7 @@ your-claw 是一个模块化的 AI Agent 框架，基于 FastAPI 脚手架构建
 ## 项目结构
 
 ```
-your-claw/
+Miniclaw/
 ├── coder/                           # 核心应用模块
 │    ├── agent/                   # Agent 循环
 │    │   └── loop.py              # AgentLoop 类

@@ -65,6 +65,7 @@ except Exception as exc:
 ```
 
 分类驱动的冷却时长：
+
 - `auth` / `billing`: 300s (坏 key, 不会很快自愈)
 - `rate_limit`: 120s (等待速率限制窗口重置)
 - `timeout`: 60s (瞬态故障, 短冷却)
@@ -83,6 +84,7 @@ profile = AuthProfile(
 ```
 
 属性：
+
 - `name`: 可读标签
 - `provider`: LLM 提供商
 - `api_key`: API 密钥
@@ -137,6 +139,7 @@ if sim.is_armed:
 ```
 
 支持的模拟类型：
+
 - `rate_limit`: 速率限制
 - `auth`: 认证失败
 - `timeout`: 请求超时
@@ -307,7 +310,7 @@ coder/components/resilience/
 
 ## 与 OpenClaw 的对比
 
-| 方面             | your-claw (本项目)                      | OpenClaw 生产代码                          |
+| 方面             | Miniclaw (本项目)                      | OpenClaw 生产代码                          |
 |------------------|------------------------------------------|----------------------------------------------|
 | 配置轮换         | 支持多配置演示                          | 跨提供商的多个真实 key                       |
 | 失败分类器       | 异常文本字符串匹配                       | 相同模式, 加 HTTP 状态码检查                 |
