@@ -1,6 +1,9 @@
 # Miniclaw
 
-Miniclaw 是一个模块化的 AI Agent 框架
+Miniclaw : 你的AI助手
+Miniclaw 是一款受[Openclaw](https://github.com/openclaw/openclaw)启发的超轻量级个人 AI 助手
+比 OpenClaw 少 99% 代码行数实现核心代理功能。
+适合个人学习[Openclaw](https://github.com/openclaw/openclaw)的核心功能
 
 ## ✨ 特色功能
 
@@ -27,47 +30,37 @@ Miniclaw/
 │    ├── agent/                   # Agent 循环
 │    │   └── loop.py              # AgentLoop 类
 │    ├── cli/                     # CLI 工具
-│    │   └── __init__.py          # 颜色输出、输入提示
 │    ├── prompts/                 # 提示词管理
-│    │   └── __init__.py          # 系统提示词
 │    ├── tools/                   # 工具组件
-│    │   ├── __init__.py          # 工具导出
 │    │   ├── schema.py            # TOOLS schema 定义
 │    │   └── handlers.py          # 工具处理器
 │    ├── session/                 # 会话组件 (s03)
-│    │   ├── __init__.py          # 会话导出
 │    │   ├── store.py             # SessionStore - JSONL 持久化
 │    │   └── guard.py             # ContextGuard - 上下文保护
 │    └── channels/                # 通道实现 (s04+)
 │    └── gateway/                 # 网关与路由 (s05)
-│       ├── __init__.py          # 网关组件导出
 │       ├── routing.py           # BindingTable 五层路由
 │       ├── agent_manager.py     # AgentManager 多agent管理
 │       ├── server.py            # GatewayServer WebSocket网关
 │       └── event_loop.py        # 共享事件循环
 │    └── intelligence/            # 智能层 (s06)
-│        ├── __init__.py          # 智能层组件导出
 │        ├── bootstrap.py         # BootstrapLoader 文件加载
 │        ├── skills.py            # SkillsManager 技能发现
 │        ├── memory.py            # MemoryStore 记忆存储和搜索
 │        └── prompt_builder.py    # 8 层提示词组装
 │    └── scheduler/               # 调度器 (s07)
-│        ├── __init__.py          # 调度器组件导出
 │        ├── heartbeat.py         # HeartbeatRunner 心跳运行器
 │        └── cron.py              # CronService 定时任务服务
 │    └── delivery/                # 消息投递 (s08)
-│        ├── __init__.py          # 投递组件导出
 │        ├── queue.py             # DeliveryQueue 持久化队列
 │        └── runner.py            # DeliveryRunner 后台投递线程
 │    └── resilience/              # 弹性组件 (s09)
-│        ├── __init__.py          # 弹性组件导出
 │        ├── failure.py           # FailoverReason 失败分类
 │        ├── profile.py           # AuthProfile, ProfileManager
 │        └── runner.py            # ResilienceRunner 三层重试
 │    └── concurrency/             # 并发组件 (s10)
-│        ├── __init__.py          # 并发组件导出
 │        └── queue.py             # LaneQueue, CommandQueue
-│    ├── settings.py                  # 配置管理
+│    ├── settings.py              # 配置管理
 ```
 
 ## 快速开始
