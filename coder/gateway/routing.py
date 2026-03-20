@@ -156,21 +156,34 @@ class BindingTable:
             (agent_id, matched_binding) 元组，如果没有匹配则返回 (None, None)
         """
         for b in self._bindings:
-            if b.tier == 1 and b.match_key == "peer_id":
-                # peer_id 可以是 "channel:peer_id" 格式或纯 "peer_id"
-                if ":" in b.match_value:
-                    if b.match_value == f"{channel}:{peer_id}":
-                        return b.agent_id, b
-                elif b.match_value == peer_id:
-                    return b.agent_id, b
-            elif (
-                (b.tier == 2 and b.match_key == "guild_id" and b.match_value == guild_id)
-                or (b.tier == 3 and b.match_key == "account_id" and b.match_value == account_id)
-                or (b.tier == 4 and b.match_key == "channel" and b.match_value == channel)
-                or (b.tier == 5 and b.match_key == "default")
-            ):
+            if self._match_binding(b, channel, account_id, guild_id, peer_id):
                 return b.agent_id, b
         return None, None
+
+    def _match_binding(
+        self,
+        b: Binding,
+        channel: str,
+        account_id: str,
+        guild_id: str,
+        peer_id: str,
+    ) -> bool:
+        """检查单个绑定是否匹配。"""
+        if b.tier == 1 and b.match_key == "peer_id":
+            if ":" in b.match_value:
+                return b.match_value == f"{channel}:{peer_id}"
+            return b.match_value == peer_id
+
+        match (b.tier, b.match_key):
+            case (2, "guild_id"):
+                return b.match_value == guild_id
+            case (3, "account_id"):
+                return b.match_value == account_id
+            case (4, "channel"):
+                return b.match_value == channel
+            case (5, "default"):
+                return True
+        return False
 
 
 __all__ = [

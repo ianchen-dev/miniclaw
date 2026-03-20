@@ -105,14 +105,10 @@ class AgentManager:
         config.id = aid
         self._agents[aid] = config
 
-        # 创建 agent 专用目录
-        agent_dir = self._agents_base / aid
-        agent_dir.mkdir(parents=True, exist_ok=True)
+        # 创建 agent 目录结构
+        (self._agents_base / aid / "sessions").mkdir(parents=True, exist_ok=True)
 
-        # 创建 sessions 子目录
-        (agent_dir / "sessions").mkdir(parents=True, exist_ok=True)
-
-        # 创建 workspace 子目录
+        # 创建 agent 专属 workspace
         workspace_dir = Path(settings.session_workspace).parent / f"workspace-{aid}"
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -207,7 +203,11 @@ class AgentManager:
             会话键到消息数量的映射
         """
         aid = normalize_agent_id(agent_id) if agent_id else ""
-        return {k: len(v) for k, v in self._sessions.items() if not aid or k.startswith(f"agent:{aid}:")}
+        prefix = f"agent:{aid}:" if aid else ""
+
+        if prefix:
+            return {k: len(v) for k, v in self._sessions.items() if k.startswith(prefix)}
+        return {k: len(v) for k, v in self._sessions.items()}
 
 
 __all__ = [

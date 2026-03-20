@@ -213,48 +213,50 @@ class GatewayServer:
         account_id = params.get("account_id", "")
         guild_id = params.get("guild_id", "")
 
-        # 确定目标 agent
-        if params.get("agent_id"):
-            # 强制指定 agent
-            agent_id = normalize_agent_id(params["agent_id"])
-            agent = self._manager.get_agent(agent_id)
-            dm_scope = agent.dm_scope if agent else "per-peer"
-            session_key = build_session_key(
-                channel=channel,
-                account_id=account_id,
-                peer_id=peer_id,
-                agent_id=agent_id,
-                dm_scope=dm_scope,
-            )
-        else:
-            # 通过路由解析
-            agent_id, binding = self._bindings.resolve(
-                channel=channel,
-                account_id=account_id,
-                guild_id=guild_id,
-                peer_id=peer_id,
-            )
-            if not agent_id:
-                agent_id = "main"
-            agent = self._manager.get_agent(agent_id)
-            dm_scope = agent.dm_scope if agent else "per-peer"
-            session_key = build_session_key(
-                channel=channel,
-                account_id=account_id,
-                peer_id=peer_id,
-                agent_id=agent_id,
-                dm_scope=dm_scope,
-            )
+        # 确定目标 agent 和会话键
+        agent_id, session_key = self._resolve_target(channel, account_id, guild_id, peer_id, params.get("agent_id"))
 
-        # 运行 agent (简化版本，实际应调用 AgentLoop)
-        # 这里返回一个占位符，实际实现需要集成 AgentLoop
-        reply = await self._run_agent(agent_id or "main", session_key, text)
+        # 运行 agent
+        reply = await self._run_agent(agent_id, session_key, text)
 
         return {
             "agent_id": agent_id,
             "session_key": session_key,
             "reply": reply,
         }
+
+    def _resolve_target(
+        self,
+        channel: str,
+        account_id: str,
+        guild_id: str,
+        peer_id: str,
+        explicit_agent_id: str | None,
+    ) -> tuple[str, str]:
+        """
+        解析目标 agent 和会话键。
+
+        Args:
+            channel: 通道类型
+            account_id: bot 账号 ID
+            guild_id: guild/服务器 ID
+            peer_id: 用户/会话 ID
+            explicit_agent_id: 显式指定的 agent ID
+
+        Returns:
+            (agent_id, session_key) 元组
+        """
+        if explicit_agent_id:
+            agent_id = normalize_agent_id(explicit_agent_id)
+        else:
+            agent_id, _ = self._bindings.resolve(channel, account_id, guild_id, peer_id)
+            agent_id = agent_id or "main"
+
+        agent = self._manager.get_agent(agent_id)
+        dm_scope = agent.dm_scope if agent else "per-peer"
+
+        session_key = build_session_key(channel, account_id, peer_id, agent_id, dm_scope)
+        return agent_id, session_key
 
     async def _run_agent(self, agent_id: str, session_key: str, text: str) -> str:
         """
