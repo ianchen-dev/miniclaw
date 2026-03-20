@@ -272,31 +272,36 @@ class CronService:
 
         future = self.command_queue.enqueue(LANE_CRON, _do_cron)
 
-        def _on_done(
-            f: concurrent.futures.Future,
-            j: CronJob = job,
-            n: str = job_name,
-            current_now: float = now,
-        ) -> None:
-            """任务完成回调"""
-            j.last_run_at = time.time()
-            j.next_run_at = time.time() + self._get_interval(j)
-            try:
-                result = f.result()
-                j.consecutive_errors = 0
-                if result:
-                    with self._queue_lock:
-                        self._output_queue.append(f"[{n}] {result}")
-            except Exception as exc:
-                j.consecutive_errors += 1
-                with self._queue_lock:
-                    self._output_queue.append(f"[{n}] error: {exc}")
-                if j.consecutive_errors >= settings.cron_auto_disable_threshold:
-                    j.enabled = False
-                    self._queue_output(f"Job '{n}' auto-disabled after 5 consecutive errors")
+        def _on_done(f: concurrent.futures.Future) -> None:
+            self._handle_job_result(job, job_name, now, f)
 
         future.add_done_callback(_on_done)
         job.next_run_at = now + self._get_interval(job)
+
+    def _handle_job_result(
+        self,
+        job: CronJob,
+        job_name: str,
+        now: float,
+        future: concurrent.futures.Future,
+    ) -> None:
+        """处理任务完成结果"""
+        job.last_run_at = time.time()
+        job.next_run_at = time.time() + self._get_interval(job)
+
+        try:
+            result = future.result()
+            job.consecutive_errors = 0
+            if result:
+                with self._queue_lock:
+                    self._output_queue.append(f"[{job_name}] {result}")
+        except Exception as exc:
+            job.consecutive_errors += 1
+            with self._queue_lock:
+                self._output_queue.append(f"[{job_name}] error: {exc}")
+            if job.consecutive_errors >= settings.cron_auto_disable_threshold:
+                job.enabled = False
+                self._queue_output(f"Job '{job_name}' auto-disabled after 5 consecutive errors")
 
     def _get_interval(self, job: CronJob) -> float:
         """获取任务的执行间隔"""
@@ -319,47 +324,35 @@ class CronService:
         status = "ok"
         error = ""
 
-        try:
-            if kind == "agent_turn":
-                # Agent 单轮任务
-                msg = payload.get("message", "")
-                if not msg:
-                    output, status = "[empty message]", "skipped"
-                else:
-                    sys_prompt = (
-                        "You are performing a scheduled background task. Be concise. "
-                        f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
-                    output = self._run_single_turn(msg, sys_prompt)
-
-            elif kind == "system_event":
-                # 系统事件
-                output = payload.get("text", "")
-                if not output:
-                    status = "skipped"
-
+        if kind == "agent_turn":
+            msg = payload.get("message", "")
+            if not msg:
+                output, status = "[empty message]", "skipped"
             else:
-                output, status, error = f"[unknown kind: {kind}]", "error", f"unknown kind: {kind}"
-
-        except Exception as exc:
-            status, error, output = "error", str(exc), f"[cron error: {exc}]"
+                sys_prompt = (
+                    "You are performing a scheduled background task. Be concise. "
+                    f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                output = self._run_single_turn(msg, sys_prompt)
+        elif kind == "system_event":
+            output = payload.get("text", "")
+            if not output:
+                status = "skipped"
+        else:
+            output, status, error = f"[unknown kind: {kind}]", "error", f"unknown kind: {kind}"
 
         # 更新任务状态
         job.last_run_at = now
+        job.next_run_at = self._compute_next(job, now)
 
         if status == "error":
             job.consecutive_errors += 1
-
-            # 检查是否需要自动禁用
             if job.consecutive_errors >= settings.cron_auto_disable_threshold:
                 job.enabled = False
                 msg = f"Job '{job.name}' auto-disabled after {job.consecutive_errors} consecutive errors: {error}"
                 self._queue_output(msg)
         else:
             job.consecutive_errors = 0
-
-        # 计算下次运行时间
-        job.next_run_at = self._compute_next(job, now)
 
         # 记录运行日志
         entry = {

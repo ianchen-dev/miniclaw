@@ -171,13 +171,19 @@ class HeartbeatRunner:
         Returns:
             有意义的内容，或 None 表示无输出
         """
-        if "HEARTBEAT_OK" in response:
-            # 去除 HEARTBEAT_OK 标记
-            stripped = response.replace("HEARTBEAT_OK", "").strip()
-            # 如果剩余内容很短，认为是空
-            return stripped if len(stripped) > 5 else None
+        if "HEARTBEAT_OK" not in response:
+            return response.strip() or None
 
-        return response.strip() or None
+        # 去除 HEARTBEAT_OK 标记
+        stripped = response.replace("HEARTBEAT_OK", "").strip()
+        # 如果剩余内容很短，认为是空
+        return stripped if len(stripped) > 5 else None
+
+    def _read_file(self, path: Path, default: str = "") -> str:
+        """读取文件内容，不存在时返回默认值"""
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+        return default
 
     def _build_heartbeat_prompt(self) -> Tuple[str, str]:
         """
@@ -188,20 +194,9 @@ class HeartbeatRunner:
         Returns:
             (用户指令, 系统提示词)
         """
-        # 读取心跳指令
-        instructions = self.heartbeat_path.read_text(encoding="utf-8").strip()
-
-        # 读取记忆
-        memory_path = self.workspace / "MEMORY.md"
-        memory_content = ""
-        if memory_path.exists():
-            memory_content = memory_path.read_text(encoding="utf-8").strip()
-
-        # 读取灵魂
-        soul_path = self.workspace / "SOUL.md"
-        soul_content = "You are a helpful AI assistant."
-        if soul_path.exists():
-            soul_content = soul_path.read_text(encoding="utf-8").strip()
+        instructions = self._read_file(self.heartbeat_path)
+        memory_content = self._read_file(self.workspace / "MEMORY.md")
+        soul_content = self._read_file(self.workspace / "SOUL.md", "You are a helpful AI assistant.")
 
         # 构建系统提示词
         extra_parts = []
@@ -225,7 +220,6 @@ class HeartbeatRunner:
         # 检查 heartbeat lane 是否有活跃任务
         lane_stats = self.command_queue.get_or_create_lane(LANE_HEARTBEAT).stats()
         if lane_stats["active"] > 0:
-            # lane 正忙，跳过本次心跳
             return
 
         def _do_heartbeat() -> Optional[str]:
@@ -245,11 +239,9 @@ class HeartbeatRunner:
                 meaningful = f.result()
                 if meaningful is None:
                     return
-                # 去重
                 if meaningful.strip() == self._last_output:
                     return
                 self._last_output = meaningful.strip()
-                # 放入输出队列
                 with self._queue_lock:
                     if len(self._output_queue) < self.max_queue_size:
                         self._output_queue.append(meaningful)
@@ -268,44 +260,40 @@ class HeartbeatRunner:
         # 非阻塞获取锁
         acquired = self.lane_lock.acquire(blocking=False)
         if not acquired:
-            # 用户持有锁，跳过本次心跳
             return
 
         self.running = True
         try:
-            # 构建提示词
-            instructions, sys_prompt = self._build_heartbeat_prompt()
-            if not instructions:
-                return
-
-            # 调用 LLM (单轮，不使用工具)
-            response = self._run_single_turn(instructions, sys_prompt)
-
-            # 解析响应
-            meaningful = self._parse_response(response)
-            if meaningful is None:
-                return
-
-            # 去重
-            if meaningful.strip() == self._last_output:
-                return
-
-            self._last_output = meaningful.strip()
-
-            # 放入输出队列
-            with self._queue_lock:
-                if len(self._output_queue) < self.max_queue_size:
-                    self._output_queue.append(meaningful)
-
+            self._execute_heartbeat()
         except Exception as exc:
-            # 错误也放入队列
             with self._queue_lock:
                 self._output_queue.append(f"[heartbeat error: {exc}]")
-
         finally:
             self.running = False
             self.last_run_at = time.time()
             self.lane_lock.release()
+
+    def _execute_heartbeat(self) -> None:
+        """执行心跳核心逻辑"""
+        instructions, sys_prompt = self._build_heartbeat_prompt()
+        if not instructions:
+            return
+
+        response = self._run_single_turn(instructions, sys_prompt)
+        meaningful = self._parse_response(response)
+        if meaningful is None:
+            return
+
+        # 去重
+        if meaningful.strip() == self._last_output:
+            return
+
+        self._last_output = meaningful.strip()
+
+        # 放入输出队列
+        with self._queue_lock:
+            if len(self._output_queue) < self.max_queue_size:
+                self._output_queue.append(meaningful)
 
     def _execute(self) -> None:
         """
