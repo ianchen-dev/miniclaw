@@ -38,14 +38,8 @@ class SkillsManager:
         Args:
             workspace_dir: 工作区目录, 默认从配置读取
         """
-        if workspace_dir is None:
-            self.workspace_dir = Path(settings.workspace_dir)
-        else:
-            self.workspace_dir = workspace_dir
-
+        self.workspace_dir = Path(workspace_dir or settings.workspace_dir)
         self.skills: List[Dict[str, str]] = []
-
-        # 从配置读取限制
         self.max_skills = settings.max_skills
         self.max_skills_prompt = settings.max_skills_prompt
 

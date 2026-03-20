@@ -50,10 +50,11 @@ class MemoryStore:
             workspace_dir: 工作区目录, 默认使用 WORKSPACE_DIR
         """
         self.workspace_dir = workspace_dir or WORKSPACE_DIR
-        self.memory_dir = MEMORY_DIR if workspace_dir is None else workspace_dir / "memory" / "daily"
+        self.memory_dir = (
+            MEMORY_DIR if workspace_dir is None
+            else workspace_dir / "memory" / "daily"
+        )
         self.memory_dir.mkdir(parents=True, exist_ok=True)
-
-        # 从配置读取参数
         self.decay_rate = settings.memory_decay_rate
         self.mmr_lambda = settings.mmr_lambda
 
@@ -390,10 +391,7 @@ class MemoryStore:
         result.sort(key=lambda x: x["score"], reverse=True)
         return result
 
-    @staticmethod
-    def _temporal_decay(
-        results: List[Dict[str, Any]], decay_rate: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    def _temporal_decay(self, results: List[Dict[str, Any]], decay_rate: float = 0.1) -> List[Dict[str, Any]]:
         """
         应用时间衰减
 
@@ -401,34 +399,28 @@ class MemoryStore:
 
         Args:
             results: 搜索结果列表
-            decay_rate: 衰减率, 默认从配置读取
+            decay_rate: 衰减率
 
         Returns:
             应用衰减后的结果列表
         """
-        if decay_rate is None:
-            decay_rate = settings.memory_decay_rate
-
         now = datetime.now(timezone.utc)
         for r in results:
             path = r["chunk"].get("path", "")
-            age_days = 0.0
             date_match = re.search(r"(\d{4}-\d{2}-\d{2})", path)
-            if date_match:
-                try:
-                    chunk_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(
-                        tzinfo=timezone.utc
-                    )
-                    age_days = (now - chunk_date).total_seconds() / 86400.0
-                except ValueError:
-                    pass
-            r["score"] *= math.exp(-decay_rate * age_days)
+            if not date_match:
+                continue
+            try:
+                chunk_date = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
+                age_days = (now - chunk_date).total_seconds() / 86400.0
+                r["score"] *= math.exp(-decay_rate * age_days)
+            except ValueError:
+                pass
         return results
 
-    @staticmethod
-    def _mmr_rerank(
-        results: List[Dict[str, Any]], lambda_param: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    def _mmr_rerank(self, results: List[Dict[str, Any]], lambda_param: float = 0.7) -> List[Dict[str, Any]]:
         """
         MMR 重排序
 
@@ -437,18 +429,15 @@ class MemoryStore:
 
         Args:
             results: 搜索结果列表
-            lambda_param: MMR lambda 参数, 默认从配置读取
+            lambda_param: MMR lambda 参数
 
         Returns:
             重排序后的结果列表
         """
-        if lambda_param is None:
-            lambda_param = settings.mmr_lambda
-
         if len(results) <= 1:
             return results
 
-        tokenized = [MemoryStore._tokenize(r["chunk"]["text"]) for r in results]
+        tokenized = [self._tokenize(r["chunk"]["text"]) for r in results]
         selected: List[int] = []
         remaining = list(range(len(results)))
         reranked: List[Dict[str, Any]] = []
@@ -458,11 +447,11 @@ class MemoryStore:
             best_mmr = float("-inf")
             for idx in remaining:
                 relevance = results[idx]["score"]
-                max_sim = 0.0
-                for sel_idx in selected:
-                    sim = MemoryStore._jaccard_similarity(tokenized[idx], tokenized[sel_idx])
-                    if sim > max_sim:
-                        max_sim = sim
+                max_sim = max(
+                    (self._jaccard_similarity(tokenized[idx], tokenized[sel_idx])
+                     for sel_idx in selected),
+                    default=0.0,
+                )
                 mmr = lambda_param * relevance - (1 - lambda_param) * max_sim
                 if mmr > best_mmr:
                     best_mmr = mmr
@@ -496,8 +485,8 @@ class MemoryStore:
         keyword_results = self._keyword_search(query, chunks, top_k=10)
         vector_results = self._vector_search(query, chunks, top_k=10)
         merged = self._merge_hybrid_results(vector_results, keyword_results)
-        decayed = self._temporal_decay(merged)
-        reranked = self._mmr_rerank(decayed)
+        decayed = self._temporal_decay(merged, self.decay_rate)
+        reranked = self._mmr_rerank(decayed, self.mmr_lambda)
 
         result = []
         for r in reranked[:top_k]:

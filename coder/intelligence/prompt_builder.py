@@ -22,7 +22,7 @@ from coder.intelligence.memory import MemoryStore
 from coder.settings import settings
 
 
-def auto_recall(user_message: str, memory_store: Optional[MemoryStore] = None, top_k: Optional[int] = None) -> str:
+def auto_recall(user_message: str, memory_store: Optional[MemoryStore] = None, top_k: int = 3) -> str:
     """
     根据用户消息自动搜索相关记忆
 
@@ -31,18 +31,13 @@ def auto_recall(user_message: str, memory_store: Optional[MemoryStore] = None, t
     Args:
         user_message: 用户消息
         memory_store: 记忆存储实例, 如果为 None 则创建新实例
-        top_k: 返回结果数量, 默认 3
+        top_k: 返回结果数量
 
     Returns:
         格式化的记忆上下文字符串
     """
-    if memory_store is None:
-        memory_store = MemoryStore()
-
-    if top_k is None:
-        top_k = 3
-
-    results = memory_store.hybrid_search(user_message, top_k=top_k)
+    store = memory_store or MemoryStore()
+    results = store.hybrid_search(user_message, top_k=top_k)
     if not results:
         return ""
 

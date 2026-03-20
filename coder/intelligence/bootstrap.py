@@ -47,12 +47,7 @@ class BootstrapLoader:
         Args:
             workspace_dir: 工作区目录, 默认从配置读取
         """
-        if workspace_dir is None:
-            self.workspace_dir = Path(settings.workspace_dir)
-        else:
-            self.workspace_dir = workspace_dir
-
-        # 从配置读取限制
+        self.workspace_dir = Path(workspace_dir or settings.workspace_dir)
         self.max_file_chars = settings.max_file_chars
         self.max_total_chars = settings.max_total_chars
 
@@ -116,7 +111,6 @@ class BootstrapLoader:
         if mode == "none":
             return {}
 
-        # minimal 模式只加载核心文件
         names = ["AGENTS.md", "TOOLS.md"] if mode == "minimal" else list(BOOTSTRAP_FILES)
 
         result: Dict[str, str] = {}
@@ -130,12 +124,11 @@ class BootstrapLoader:
             truncated = self.truncate_file(raw)
 
             # 检查总量上限
-            if total + len(truncated) > self.max_total_chars:
-                remaining = self.max_total_chars - total
-                if remaining > 0:
-                    truncated = self.truncate_file(raw, remaining)
-                else:
-                    break
+            remaining = self.max_total_chars - total
+            if remaining <= 0:
+                break
+            if len(truncated) > remaining:
+                truncated = self.truncate_file(raw, remaining)
 
             result[name] = truncated
             total += len(truncated)
