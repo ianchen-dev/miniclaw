@@ -36,10 +36,9 @@ uv run setup-dev
 
 ### Running the Application
 ```bash
-python manage.py runserver    # Primary method
-uv run runserver              # Alternative via UV script
+uv run miniclaw              # Primary method - CLI agent loop
+python -m coder.main         # Alternative
 ```
-Default: http://127.0.0.1:8000 | API Docs: http://127.0.0.1:8000/docs
 
 ### Testing
 ```bash
@@ -74,105 +73,107 @@ uv run cz commit                    # Conventional commit (format: <type>(<scope
 ### Project Structure
 ```
 coder/                    # Core application module
-├── application.py        # FastAPI app factory, middleware registration
+├── agent/                # Agent loop (s01) - core REPL with stop_reason flow
+│   └── loop.py           # AgentLoop class
+├── tools/                # Tool use (s02) - TOOLS schema + TOOL_HANDLERS dispatch
+├── session/              # Session & context (s03) - JSONL persistence, ContextGuard overflow protection
+├── channels/             # Multi-channel (s04) - Channel ABC, CLI/Telegram/Feishu implementations
+├── gateway/              # Gateway & routing (s05) - BindingTable 5-tier routing, WebSocket gateway
+├── intelligence/         # Intelligence layer (s06) - 8-layer prompt assembly, skills, memory
+├── scheduler/            # Scheduler (s07) - HeartbeatRunner, CronService
+├── delivery/             # Message delivery (s08) - Persistent queue with retry
+├── resilience/           # Resilience (s09) - 3-layer retry, fallback models
+├── concurrency/          # Concurrency (s10) - LaneQueue, CommandQueue
+├── cli/                  # CLI utilities (colors, input/output)
+├── prompts/              # System prompt management
 ├── settings.py           # Pydantic Settings configuration
-├── run.py                # Uvicorn entry point
-├── common/               # Utilities: logger, exception_handler, bgtask, singleton
-├── middleware/           # Custom middleware (Trace, UseTime, BackGroundTask)
-├── controllers/v1/       # API v1 endpoints
-├── schemas/              # Pydantic models (base.py has response wrappers)
-└── services/             # Business logic layer
+└── main.py               # Entry point
 
-extended/fastapi/         # Framework extensions (custom ORJSONResponse)
-static/swagger/           # Offline Swagger UI assets
-scripts/dev/              # Development scripts
+scripts/dev/              # Development scripts (setup_dev, check_dev, format_code)
+workspace/                # Runtime workspace (sessions, agents, bootstrap files, skills)
 tests/                    # Test suite
-manage.py                 # Click-based CLI
 ```
 
-### Application Bootstrap Flow
-1. `coder/__init__.py` → setup_logger()
-2. `coder/run.py` → imports app from application.py, reads settings
-3. `coder/application.py` → creates FastAPI app, registers middleware (CORS, Trace, UseTime, BG tasks), mounts static files, configures Jinja2 templates, sets up offline API docs, includes routers
+### Core Philosophy
+**Agent = while True + stop_reason**
+
+The agent loop continuously processes messages until `stop_reason` indicates completion:
+- `"stop"` → Print response and end
+- `"tool_calls"` → Execute tools, append results, continue loop
+
+### Running Agent Loop
+```python
+from coder.agent import AgentLoop, run_agent_loop
+from coder.tools import TOOLS
+
+# Quick start with default settings
+run_agent_loop()
+
+# With tools
+run_agent_loop(tools=TOOLS)
+
+# With tools and session persistence
+run_agent_loop(tools=TOOLS, enable_session=True)
+
+# With intelligence layer (8-layer prompt assembly)
+run_agent_loop(tools=TOOLS, enable_intelligence=True)
+
+# Custom configuration
+loop = AgentLoop(
+    model_id="gpt-4",
+    api_key="your-key",
+    system_prompt="You are a code reviewer.",
+    tools=TOOLS,
+    enable_session=True,
+    enable_intelligence=True,
+    agent_id="my-agent",
+)
+loop.run()
+```
 
 ### Request Flow
 ```
-Request → BackGroundTaskMiddleware → CORSMiddleware → TraceMiddleware → UseTimeMiddleware → Route Handler → Response
-```
-
-### Response Patterns
-```python
-from coder.schemas.base import Success, SuccessExtra, Fail
-
-# Success response
-return Success(data={"key": "value"}, msg="Success")
-# {"code": 200, "msg": "Success", "data": {"key": "value"}}
-
-# Paginated response
-return SuccessExtra(data=items, total=100, page=1, page_size=20)
-
-# Error response
-from starlette.status import HTTP_400_BAD_REQUEST
-return Fail(code=HTTP_400_BAD_REQUEST, msg="Invalid input")
-```
-
-### Middleware Utilities
-```python
-from coder.middleware.middlewares import get_trace_id
-trace_id = get_trace_id()  # Get current request trace ID
-
-from coder.common.bgtask import BgTasks
-BgTasks.add_task(lambda: print("Background work"))  # Schedule background task
+User Input → messages[] → LLM API → stop_reason?
+                                       ↓
+                    "stop"           "tool_calls"
+                       ↓                  ↓
+                  Print response    Execute tools
+                                         ↓
+                                    Tool results
+                                         ↓
+                                    Back to LLM → (loop until "stop")
 ```
 
 ### Configuration
 Environment variables in `.env` (copy from `.env.example`):
 - `LOG_LEVEL` - DEBUG, INFO, WARNING, ERROR, CRITICAL
-- `API_DOCS_ENABLED` - Enable/disable Swagger UI
-- `HOST`, `PORT`, `WORKERS` - Server configuration
-- `CORS_*` - CORS settings
-- `API_KEY`, `MODEL_ID`, `API_BASE_URL`, `MAX_TOKENS` - Agent configuration
+- `API_KEY` - LLM API key (required)
+- `MODEL_ID` - Model identifier (default: claude-sonnet-4-20250514)
+- `API_BASE_URL` - Custom API endpoint (optional)
+- `MAX_TOKENS` - Max tokens per response (default: 8096)
+
+Key feature toggles (see `.env.example` for full list):
+- Session: `CONTEXT_SAFE_LIMIT`, `SESSION_WORKSPACE`
+- Channels: `TELEGRAM_BOT_TOKEN`, `FEISHU_APP_ID`
+- Gateway: `GATEWAY_ENABLED`, `GATEWAY_PORT`
+- Intelligence: `WORKSPACE_DIR`, `MAX_SKILLS`, `MEMORY_TOP_K`
+- Scheduler: `HEARTBEAT_INTERVAL`, `CRON_AUTO_DISABLE_THRESHOLD`
 
 Settings class in `coder/settings.py` uses Pydantic Settings with automatic env var loading.
-
-### Agent Components (s01+)
-```
-coder/components/
-├── cli/                    # CLI tools (colors, input/output)
-├── prompts/                # System prompt management
-├── agent/                  # Agent loop implementation
-└── channels/               # Channel implementations (s04+)
-```
-
-Running Agent Loop:
-```python
-from coder.components.agent import AgentLoop, run_agent_loop
-
-# Quick start
-run_agent_loop()
-
-# With custom config
-loop = AgentLoop(model_id="gpt-4", api_key="your-key")
-loop.run()
-```
-
-### Adding New Routes
-1. Create controller in `coder/controllers/my_controller.py`
-2. Register in `coder/application.py`: `app.include_router(my_router)`
 
 ## Code Style
 
 - **Formatter**: Ruff (120 char line length, double quotes, spaces)
-- **Imports**: isort-style ordering
-- **Type hints**: Required (Pyright for type checking)
+- **Imports**: isort-style ordering (first-party: coder, extended, scripts, tests)
+- **Type hints**: Required (Pyright for type checking, many checks relaxed for flexibility)
 - **Commits**: Conventional commits format (`<type>(<scope>): <subject>`)
 - **Pre-commit hooks**: Automatic linting, formatting, and commit message validation
 
 ## Key Dependencies
 
-- FastAPI 0.115.12 with standard extras
-- Pydantic Settings 2.8.1 for configuration
-- ORJSON for fast JSON serialization
-- Uvicorn as ASGI server
-- Ruff for linting/formatting
-- Pytest for testing
+- **pydantic-settings 2.8.1** - Configuration management
+- **litellm >=1.50.0** - LLM API integration
+- **croniter >=3.0.0** - Cron scheduling
+- **pytest ~=8.3.5** - Testing framework
+- **ruff 0.11.2** - Linting and formatting
+- **pyright 1.1.391** - Type checking
