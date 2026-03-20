@@ -62,6 +62,7 @@ from coder.cli import (
     print_session,
     print_warn,
 )
+from coder.common.path import CRON_FILENAME
 from coder.settings import settings
 from coder.tools import process_tool_call
 
@@ -168,6 +169,7 @@ class AgentLoop:
             MemoryStore,
             SkillsManager,
         )
+        from coder.tools import set_memory_store
 
         self._bootstrap_loader = BootstrapLoader()
         self._bootstrap_data = self._bootstrap_loader.load_all(mode="full")
@@ -177,6 +179,9 @@ class AgentLoop:
         self._skills_block = self._skills_manager.format_prompt_block()
 
         self._memory_store = MemoryStore()
+
+        # 注入记忆存储到工具模块 (黑盒解耦)
+        set_memory_store(self._memory_store)
 
     def _init_scheduler(self) -> None:
         """初始化调度器组件 (s07)"""
@@ -192,7 +197,7 @@ class AgentLoop:
         )
 
         # Cron 服务
-        cron_file = self._workspace / "CRON.json"
+        cron_file = self._workspace / CRON_FILENAME
         self._cron_service = CronService(cron_file, workspace=self._workspace)
 
         # 启动心跳

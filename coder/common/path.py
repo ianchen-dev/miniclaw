@@ -20,3 +20,9 @@ MEMORY_DIR = WORKSPACE_DIR / "memory" / "daily"
 
 # 长期记忆文件
 EVERGREEN_MEMORY_PATH = WORKSPACE_DIR / "MEMORY.md"
+
+# Cron 配置文件名
+CRON_FILENAME = "CRON.json"
+
+# Cron 配置文件路径（默认工作区）
+CRON_FILE = WORKSPACE_DIR / CRON_FILENAME
