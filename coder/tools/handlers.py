@@ -30,7 +30,7 @@ _memory_store: MemoryStore | None = None
 
 
 def get_memory_store() -> MemoryStore:
-    """获取记忆存储单例实例"""
+    """获取记忆存储单例实例。"""
     global _memory_store
     if _memory_store is None:
         _memory_store = MemoryStore(workspace_dir=WORKDIR)
@@ -46,15 +46,6 @@ def safe_path(raw: str) -> Path:
     """
     将用户/模型传入的路径解析为安全的绝对路径。
     防止路径穿越: 最终路径必须在 WORKDIR 之下。
-
-    Args:
-        raw: 原始路径字符串
-
-    Returns:
-        解析后的安全 Path 对象
-
-    Raises:
-        ValueError: 如果路径尝试穿越到 WORKDIR 之外
     """
     target = (WORKDIR / raw).resolve()
     if not str(target).startswith(str(WORKDIR)):
@@ -63,16 +54,7 @@ def safe_path(raw: str) -> Path:
 
 
 def truncate(text: str, limit: int = MAX_TOOL_OUTPUT) -> str:
-    """
-    截断过长的输出，并附上提示。
-
-    Args:
-        text: 原始文本
-        limit: 最大字符数
-
-    Returns:
-        截断后的文本
-    """
+    """截断过长的输出，并附上提示。"""
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n... [truncated, {len(text)} total chars]"
@@ -87,16 +69,7 @@ def truncate(text: str, limit: int = MAX_TOOL_OUTPUT) -> str:
 
 
 def tool_bash(command: str, timeout: int = 30) -> str:
-    """
-    执行 shell 命令并返回输出。
-
-    Args:
-        command: 要执行的 shell 命令
-        timeout: 超时时间（秒）
-
-    Returns:
-        命令输出或错误信息
-    """
+    """执行 shell 命令并返回输出。"""
     # 基础安全检查: 拒绝明显危险的命令
     dangerous = ["rm -rf /", "mkfs", "> /dev/sd", "dd if="]
     for pattern in dangerous:
@@ -128,15 +101,7 @@ def tool_bash(command: str, timeout: int = 30) -> str:
 
 
 def tool_read_file(file_path: str) -> str:
-    """
-    读取文件内容。
-
-    Args:
-        file_path: 文件路径（相对于工作目录）
-
-    Returns:
-        文件内容或错误信息
-    """
+    """读取文件内容。"""
     print_tool("read_file", file_path)
     try:
         target = safe_path(file_path)
@@ -153,16 +118,7 @@ def tool_read_file(file_path: str) -> str:
 
 
 def tool_write_file(file_path: str, content: str) -> str:
-    """
-    写入内容到文件。父目录不存在时自动创建。
-
-    Args:
-        file_path: 文件路径（相对于工作目录）
-        content: 要写入的内容
-
-    Returns:
-        操作结果信息
-    """
+    """写入内容到文件。父目录不存在时自动创建。"""
     print_tool("write_file", file_path)
     try:
         target = safe_path(file_path)
@@ -179,15 +135,6 @@ def tool_edit_file(file_path: str, old_string: str, new_string: str) -> str:
     """
     精确替换文件中的文本。
     old_string 必须在文件中恰好出现一次，否则报错。
-    这和 OpenClaw 的 edit 工具逻辑一致。
-
-    Args:
-        file_path: 文件路径（相对于工作目录）
-        old_string: 要查找和替换的文本（必须唯一）
-        new_string: 替换后的文本
-
-    Returns:
-        操作结果信息
     """
     print_tool("edit_file", f"{file_path} (replace {len(old_string)} chars)")
     try:
@@ -213,47 +160,24 @@ def tool_edit_file(file_path: str, old_string: str, new_string: str) -> str:
 
 
 def tool_memory_write(content: str, category: str = "general") -> str:
-    """
-    保存重要信息到长期记忆。
-
-    Args:
-        content: 要记住的事实或观察
-        category: 分类 (preference, fact, context 等)
-
-    Returns:
-        操作结果信息
-    """
+    """保存重要信息到长期记忆。"""
     print_tool("memory_write", f"{len(content)} chars")
     try:
         store = get_memory_store()
-        result = store.write_memory(content, category=category)
-        return result
+        return store.write_memory(content, category=category)
     except Exception as exc:
         return f"Error: {exc}"
 
 
 def tool_memory_search(query: str, top_k: int = 5) -> str:
-    """
-    搜索存储的记忆。
-
-    使用混合搜索: TF-IDF + 向量 + 时间衰减 + MMR 重排序。
-
-    Args:
-        query: 搜索关键词
-        top_k: 返回结果数量上限
-
-    Returns:
-        匹配的记忆条目
-    """
+    """搜索存储的记忆（使用混合搜索: TF-IDF + 向量 + 时间衰减 + MMR 重排序）。"""
     print_tool("memory_search", query)
     try:
         store = get_memory_store()
         results = store.hybrid_search(query, top_k=top_k)
         if not results:
             return f"No matches for '{query}'."
-        lines = []
-        for r in results:
-            lines.append(f"[{r['path']}] (score: {r['score']})\n{r['snippet']}")
+        lines = [f"[{r['path']}] (score: {r['score']})\n{r['snippet']}" for r in results]
         return "\n\n".join(lines)
     except Exception as exc:
         return f"Error: {exc}"
@@ -281,16 +205,7 @@ TOOL_HANDLERS: Dict[str, Callable[..., str]] = {
 def process_tool_call(tool_name: str, tool_input: Union[Dict[str, Any], str]) -> str:
     """
     根据工具名分发到对应的处理函数。
-    这就是整个 "agent" 的核心调度逻辑。
-
-    错误作为字符串返回（而非抛出异常），这样模型可以看到错误并自行修正。
-
-    Args:
-        tool_name: 工具名称
-        tool_input: 工具输入参数 (字典或 JSON 字符串)
-
-    Returns:
-        工具执行结果或错误信息
+    错误作为字符串返回，这样模型可以看到错误并自行修正。
     """
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
