@@ -238,22 +238,18 @@ class SessionStore:
                     "name": record["name"],
                     "input": record["input"],
                 }
+                # Append to last assistant message if possible
                 if messages and messages[-1]["role"] == "assistant":
-                    content = messages[-1]["content"]
-                    if isinstance(content, list):
-                        content.append(block)
+                    last_content = messages[-1]["content"]
+                    if isinstance(last_content, list):
+                        last_content.append(block)
                     else:
                         messages[-1]["content"] = [
-                            {"type": "text", "text": str(content)},
+                            {"type": "text", "text": str(last_content)},
                             block,
                         ]
                 else:
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": [block],
-                        }
-                    )
+                    messages.append({"role": "assistant", "content": [block]})
 
             elif rtype == "tool_result":
                 result_block = {
@@ -261,23 +257,19 @@ class SessionStore:
                     "tool_use_id": record["tool_use_id"],
                     "content": record["content"],
                 }
-                # 将连续的 tool_result 合并到同一个 user 消息中
-                if (
+                # Merge consecutive tool_results into same user message
+                can_merge = (
                     messages
                     and messages[-1]["role"] == "user"
                     and isinstance(messages[-1]["content"], list)
                     and messages[-1]["content"]
                     and isinstance(messages[-1]["content"][0], dict)
                     and messages[-1]["content"][0].get("type") == "tool_result"
-                ):
+                )
+                if can_merge:
                     messages[-1]["content"].append(result_block)
                 else:
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [result_block],
-                        }
-                    )
+                    messages.append({"role": "user", "content": [result_block]})
 
         return messages
 

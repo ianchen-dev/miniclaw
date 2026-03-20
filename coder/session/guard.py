@@ -30,25 +30,31 @@ def _serialize_messages_for_summary(messages: List[Dict[str, Any]]) -> str:
     for msg in messages:
         role = msg["role"]
         content = msg.get("content", "")
+
         if isinstance(content, str):
             parts.append(f"[{role}]: {content}")
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict):
-                    btype = block.get("type", "")
-                    if btype == "text":
-                        parts.append(f"[{role}]: {block['text']}")
-                    elif btype == "tool_use":
-                        parts.append(
-                            f"[{role} called {block.get('name', '?')}]: "
-                            f"{json.dumps(block.get('input', {}), ensure_ascii=False)}"
-                        )
-                    elif btype == "tool_result":
-                        rc = block.get("content", "")
-                        preview = rc[:500] if isinstance(rc, str) else str(rc)[:500]
-                        parts.append(f"[tool_result]: {preview}")
-                elif hasattr(block, "text"):
-                    parts.append(f"[{role}]: {block.text}")
+            continue
+
+        if not isinstance(content, list):
+            continue
+
+        for block in content:
+            if isinstance(block, dict):
+                btype = block.get("type", "")
+                if btype == "text":
+                    parts.append(f"[{role}]: {block['text']}")
+                elif btype == "tool_use":
+                    parts.append(
+                        f"[{role} called {block.get('name', '?')}]: "
+                        f"{json.dumps(block.get('input', {}), ensure_ascii=False)}"
+                    )
+                elif btype == "tool_result":
+                    rc = block.get("content", "")
+                    preview = rc[:500] if isinstance(rc, str) else str(rc)[:500]
+                    parts.append(f"[tool_result]: {preview}")
+            elif hasattr(block, "text"):
+                parts.append(f"[{role}]: {block.text}")
+
     return "\n".join(parts)
 
 
@@ -102,22 +108,26 @@ class ContextGuard:
             content = msg.get("content", "")
             if isinstance(content, str):
                 total += self.estimate_tokens(content)
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        if "text" in block:
-                            total += self.estimate_tokens(block["text"])
-                        elif block.get("type") == "tool_result":
-                            rc = block.get("content", "")
-                            if isinstance(rc, str):
-                                total += self.estimate_tokens(rc)
-                        elif block.get("type") == "tool_use":
-                            total += self.estimate_tokens(json.dumps(block.get("input", {})))
-                    else:
-                        if hasattr(block, "text"):
-                            total += self.estimate_tokens(block.text)
-                        elif hasattr(block, "input"):
-                            total += self.estimate_tokens(json.dumps(block.input))
+                continue
+
+            if not isinstance(content, list):
+                continue
+
+            for block in content:
+                if isinstance(block, dict):
+                    if "text" in block:
+                        total += self.estimate_tokens(block["text"])
+                    elif block.get("type") == "tool_result":
+                        rc = block.get("content", "")
+                        if isinstance(rc, str):
+                            total += self.estimate_tokens(rc)
+                    elif block.get("type") == "tool_use":
+                        total += self.estimate_tokens(json.dumps(block.get("input", {})))
+                else:
+                    if hasattr(block, "text"):
+                        total += self.estimate_tokens(block.text)
+                    elif hasattr(block, "input"):
+                        total += self.estimate_tokens(json.dumps(block.input))
         return total
 
     def truncate_tool_result(self, result: str, max_fraction: float = 0.3) -> str:
