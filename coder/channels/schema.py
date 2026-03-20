@@ -97,11 +97,14 @@ def build_session_key(
     acc = (account_id or "default").strip().lower()
     pid = (peer_id or "").strip().lower()
 
-    if dm_scope == "per-account-channel-peer" and pid:
+    if not pid:
+        return f"agent:{aid}:main"
+
+    if dm_scope == "per-account-channel-peer":
         return f"agent:{aid}:{ch}:{acc}:direct:{pid}"
-    if dm_scope == "per-channel-peer" and pid:
+    if dm_scope == "per-channel-peer":
         return f"agent:{aid}:{ch}:direct:{pid}"
-    if dm_scope == "per-peer" and pid:
+    if dm_scope == "per-peer":
         return f"agent:{aid}:direct:{pid}"
     return f"agent:{aid}:main"
 

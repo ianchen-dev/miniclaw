@@ -220,16 +220,17 @@ class TelegramChannel(Channel):
                 if m.get("caption"):
                     captions.append(m["caption"])
                 for mt in ("photo", "video", "document", "audio"):
-                    if mt in m:
-                        raw_m = m[mt]
-                        if isinstance(raw_m, list) and raw_m:
-                            fid = raw_m[-1].get("file_id", "")
-                        elif isinstance(raw_m, dict):
-                            fid = raw_m.get("file_id", "")
-                        else:
-                            fid = ""
-                        if fid:
-                            media_items.append({"type": mt, "file_id": fid})
+                    if mt not in m:
+                        continue
+                    raw_m = m[mt]
+                    if isinstance(raw_m, list) and raw_m:
+                        fid = raw_m[-1].get("file_id", "")
+                    elif isinstance(raw_m, dict):
+                        fid = raw_m.get("file_id", "")
+                    else:
+                        continue
+                    if fid:
+                        media_items.append({"type": mt, "file_id": fid})
 
             inbound = self._parse(entries[0][0], entries[0][1])
             if inbound:

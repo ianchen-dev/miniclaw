@@ -109,9 +109,10 @@ class FeishuChannel(Channel):
         """
         for m in event.get("message", {}).get("mentions", []):
             mid = m.get("id", {})
-            if isinstance(mid, dict) and mid.get("open_id") == self._bot_open_id:
-                return True
-            if isinstance(mid, str) and mid == self._bot_open_id:
+            if isinstance(mid, dict):
+                if mid.get("open_id") == self._bot_open_id:
+                    return True
+            elif isinstance(mid, str) and mid == self._bot_open_id:
                 return True
             if m.get("key") == self._bot_open_id:
                 return True
