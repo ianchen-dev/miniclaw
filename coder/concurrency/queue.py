@@ -24,170 +24,105 @@ import concurrent.futures
 import threading
 import time
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Deque, Dict, List, NamedTuple, Optional
+
+
+class _QueuedTask(NamedTuple):
+    """A task waiting in the queue with its Future and generation."""
+
+    func: Callable[[], Any]
+    future: concurrent.futures.Future
+    generation: int
 
 
 class LaneQueue:
     """
-    命名 FIFO 队列，最多并行运行 max_concurrency 个任务
+    命名 FIFO 队列，最多并行运行 max_concurrency 个任务。
 
-    每个入队的 callable 在自己的线程中运行。结果通过
-    concurrent.futures.Future 投递。generation 计数器支持重启恢复:
-    当 generation 递增后，来自旧 generation 的过期任务完成时
-    不会重新泵送队列。
-
-    Attributes:
-        name: Lane 名称
-        max_concurrency: 最大并发任务数
-
-    Example:
-        lane = LaneQueue("main", max_concurrency=1)
-        future = lane.enqueue(lambda: do_work())
-        result = future.result()
+    任务在独立线程中执行，结果通过 Future 返回。generation 机制支持重启恢复：
+    旧 generation 的任务完成时不会触发新任务执行。
     """
 
     def __init__(self, name: str, max_concurrency: int = 1) -> None:
-        """
-        初始化 LaneQueue
-
-        Args:
-            name: Lane 名称
-            max_concurrency: 最大并发任务数，默认 1 (串行执行)
-        """
         self.name = name
         self.max_concurrency = max(1, max_concurrency)
-
-        # 内部状态
-        self._deque: deque[tuple[Callable[[], Any], concurrent.futures.Future, int]] = deque()
+        self._deque: Deque[_QueuedTask] = deque()
         self._condition = threading.Condition()
         self._active_count = 0
         self._generation = 0
 
     @property
     def generation(self) -> int:
-        """获取当前 generation 计数器"""
         with self._condition:
             return self._generation
 
     @generation.setter
     def generation(self, value: int) -> None:
-        """设置 generation 计数器"""
         with self._condition:
             self._generation = value
             self._condition.notify_all()
 
     def enqueue(
         self,
-        fn: Callable[[], Any],
+        func: Callable[[], Any],
         generation: Optional[int] = None,
     ) -> concurrent.futures.Future:
-        """
-        将 callable 加入队列，返回结果的 Future
-
-        如果 generation 为 None，使用当前 lane 的 generation。
-
-        Args:
-            fn: 要执行的 callable
-            generation: 可选的 generation 标识
-
-        Returns:
-            concurrent.futures.Future 对象，可用于获取结果
-        """
-        future: concurrent.futures.Future = concurrent.futures.Future()
-
+        """将 callable 加入队列，返回结果的 Future。"""
+        future = concurrent.futures.Future()
         with self._condition:
             gen = generation if generation is not None else self._generation
-            self._deque.append((fn, future, gen))
+            self._deque.append(_QueuedTask(func, future, gen))
             self._pump()
-
         return future
 
     def _pump(self) -> None:
-        """
-        从 deque 弹出任务并运行，直到 active >= max_concurrency
-
-        调用时必须持有 self._condition。
-        """
+        """从队列弹出任务并启动，直到达到 max_concurrency。"""
         while self._active_count < self.max_concurrency and self._deque:
-            fn, future, gen = self._deque.popleft()
+            task = self._deque.popleft()
             self._active_count += 1
-
-            t = threading.Thread(
+            threading.Thread(
                 target=self._run_task,
-                args=(fn, future, gen),
+                args=(task.func, task.future, task.generation),
                 daemon=True,
                 name=f"lane-{self.name}",
-            )
-            t.start()
+            ).start()
 
     def _run_task(
         self,
-        fn: Callable[[], Any],
+        func: Callable[[], Any],
         future: concurrent.futures.Future,
-        gen: int,
+        generation: int,
     ) -> None:
-        """
-        执行 fn，设置 future 结果，然后调用 _task_done
-
-        Args:
-            fn: 要执行的 callable
-            future: 结果 Future
-            gen: 任务所属的 generation
-        """
+        """执行任务，设置结果，完成后调用 _task_done。"""
         try:
-            result = fn()
-            future.set_result(result)
+            future.set_result(func())
         except Exception as exc:
             future.set_exception(exc)
         finally:
-            self._task_done(gen)
+            self._task_done(generation)
 
-    def _task_done(self, gen: int) -> None:
-        """
-        递减活跃计数，仅在 generation 匹配时重新泵送
-
-        Args:
-            gen: 完成任务的 generation
-        """
+    def _task_done(self, generation: int) -> None:
+        """递减活跃计数，若 generation 匹配则继续 pump。"""
         with self._condition:
             self._active_count -= 1
-
-            # 只有当前 generation 的任务才会触发新的 pump
-            if gen == self._generation:
+            if generation == self._generation:
                 self._pump()
-
             self._condition.notify_all()
 
     def wait_for_idle(self, timeout: Optional[float] = None) -> bool:
-        """
-        阻塞直到 active_count == 0 且 deque 为空
-
-        Args:
-            timeout: 超时时间 (秒)，None 表示无限等待
-
-        Returns:
-            True 表示达到空闲，False 表示超时
-        """
-        deadline = (time.monotonic() + timeout) if timeout is not None else None
+        """阻塞直到队列为空且无活跃任务。"""
+        deadline = time.monotonic() + timeout if timeout else None
 
         with self._condition:
-            while self._active_count > 0 or len(self._deque) > 0:
-                remaining = None
-                if deadline is not None:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        return False
+            while self._active_count > 0 or self._deque:
+                remaining = deadline - time.monotonic() if deadline else None
+                if remaining is not None and remaining <= 0:
+                    return False
                 self._condition.wait(timeout=remaining)
-
             return True
 
     def stats(self) -> Dict[str, Any]:
-        """
-        获取 lane 统计信息
-
-        Returns:
-            包含 name, queue_depth, active, max_concurrency, generation 的字典
-        """
+        """返回 lane 统计信息。"""
         with self._condition:
             return {
                 "name": self.name,
@@ -200,33 +135,17 @@ class LaneQueue:
 
 class CommandQueue:
     """
-    中央调度器，将 callable 路由到命名的 LaneQueue
+    中央调度器，将 callable 路由到命名的 LaneQueue。
 
-    Lane 在首次使用时惰性创建。reset_all() 递增所有 generation 计数器，
-    使得来自上一个生命周期的过期任务不会重新泵送队列。
-
-    Example:
-        cmd_queue = CommandQueue()
-        future = cmd_queue.enqueue("main", lambda: do_work())
-        result = future.result()
+    Lane 惰性创建。reset_all() 递增所有 generation，使旧任务不触发新任务。
     """
 
     def __init__(self) -> None:
-        """初始化 CommandQueue"""
         self._lanes: Dict[str, LaneQueue] = {}
         self._lock = threading.Lock()
 
     def get_or_create_lane(self, name: str, max_concurrency: int = 1) -> LaneQueue:
-        """
-        获取已有 lane 或创建新的
-
-        Args:
-            name: Lane 名称
-            max_concurrency: 创建新 lane 时的最大并发数
-
-        Returns:
-            LaneQueue 实例
-        """
+        """获取已有 lane 或创建新的。"""
         with self._lock:
             if name not in self._lanes:
                 self._lanes[name] = LaneQueue(name, max_concurrency)
@@ -235,104 +154,49 @@ class CommandQueue:
     def enqueue(
         self,
         lane_name: str,
-        fn: Callable[[], Any],
+        func: Callable[[], Any],
     ) -> concurrent.futures.Future:
-        """
-        将 callable 路由到指定 lane，返回 Future
-
-        Args:
-            lane_name: 目标 lane 名称
-            fn: 要执行的 callable
-
-        Returns:
-            concurrent.futures.Future 对象
-        """
-        lane = self.get_or_create_lane(lane_name)
-        return lane.enqueue(fn)
+        """将 callable 路由到指定 lane，返回 Future。"""
+        return self.get_or_create_lane(lane_name).enqueue(func)
 
     def reset_all(self) -> Dict[str, int]:
-        """
-        递增所有 lane 的 generation，用于重启恢复
-
-        Returns:
-            lane_name -> new_generation 的字典
-        """
-        result: Dict[str, int] = {}
-
+        """递增所有 lane 的 generation，返回新的 generation 值。"""
         with self._lock:
-            for name, lane in self._lanes.items():
-                lane.generation += 1
-                result[name] = lane.generation
+            return {name: self._bump_generation(lane) for name, lane in self._lanes.items()}
 
-        return result
+    def _bump_generation(self, lane: LaneQueue) -> int:
+        lane.generation += 1
+        return lane.generation
 
     def wait_for_all(self, timeout: float = 10.0) -> bool:
-        """
-        等待所有 lane 变为空闲
-
-        Args:
-            timeout: 超时时间 (秒)
-
-        Returns:
-            True 表示全部空闲，False 表示超时
-        """
+        """等待所有 lane 变为空闲。"""
         deadline = time.monotonic() + timeout
-
         with self._lock:
             lanes = list(self._lanes.values())
 
         for lane in lanes:
             remaining = deadline - time.monotonic()
-            if remaining <= 0:
+            if remaining <= 0 or not lane.wait_for_idle(timeout=remaining):
                 return False
-            if not lane.wait_for_idle(timeout=remaining):
-                return False
-
         return True
 
     def stats(self) -> Dict[str, Dict[str, Any]]:
-        """
-        汇总所有 lane 的统计信息
-
-        Returns:
-            lane_name -> stats dict 的字典
-        """
+        """汇总所有 lane 的统计信息。"""
         with self._lock:
             return {name: lane.stats() for name, lane in self._lanes.items()}
 
     def lane_names(self) -> List[str]:
-        """
-        获取所有 lane 名称
-
-        Returns:
-            lane 名称列表
-        """
+        """获取所有 lane 名称。"""
         with self._lock:
             return list(self._lanes.keys())
 
     def get_lane(self, name: str) -> Optional[LaneQueue]:
-        """
-        获取指定名称的 lane，不创建
-
-        Args:
-            name: Lane 名称
-
-        Returns:
-            LaneQueue 实例或 None
-        """
+        """获取指定 lane，不存在则返回 None。"""
         with self._lock:
             return self._lanes.get(name)
 
 
-# ---------------------------------------------------------------------------
 # 标准 Lane 名称常量
-# ---------------------------------------------------------------------------
-
-#: 主 lane，用于用户交互
-LANE_MAIN = "main"
-
-#: Cron 任务 lane
-LANE_CRON = "cron"
-
-#: 心跳任务 lane
-LANE_HEARTBEAT = "heartbeat"
+LANE_MAIN = "main"  # 用户交互
+LANE_CRON = "cron"  # Cron 任务
+LANE_HEARTBEAT = "heartbeat"  # 心跳任务
