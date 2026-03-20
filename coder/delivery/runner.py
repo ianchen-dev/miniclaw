@@ -34,6 +34,7 @@ from coder.cli import print_info, print_warn
 from coder.delivery.queue import (
     MAX_RETRIES,
     DeliveryQueue,
+    QueuedDelivery,
     compute_backoff_ms,
 )
 
@@ -95,11 +96,11 @@ class DeliveryRunner:
 
     def _recovery_scan(self) -> None:
         """启动时统计待处理和失败条目"""
-        pending = self.queue.load_pending()
-        failed = self.queue.load_failed()
-
         if not self.verbose:
             return
+
+        pending = self.queue.load_pending()
+        failed = self.queue.load_failed()
 
         parts = []
         if pending:
@@ -107,10 +108,8 @@ class DeliveryRunner:
         if failed:
             parts.append(f"{len(failed)} failed")
 
-        if parts:
-            print_info(f"[delivery] Recovery: {', '.join(parts)}")
-        else:
-            print_info("[delivery] Recovery: queue is clean")
+        status = ", ".join(parts) if parts else "queue is clean"
+        print_info(f"[delivery] Recovery: {status}")
 
     def _background_loop(self) -> None:
         """后台循环"""
@@ -155,21 +154,21 @@ class DeliveryRunner:
                 self.queue.fail(entry.id, error_msg)
                 self.total_failed += 1
 
-                if not self.verbose:
-                    continue
+                if self.verbose:
+                    self._log_failure(entry, error_msg)
 
-                retry_info = f"retry {entry.retry_count + 1}/{MAX_RETRIES}"
+    def _log_failure(self, entry: QueuedDelivery, error_msg: str) -> None:
+        """打印失败日志"""
+        retry_num = entry.retry_count + 1
+        retry_info = f"retry {retry_num}/{MAX_RETRIES}"
 
-                if entry.retry_count + 1 >= MAX_RETRIES:
-                    # 达到最大重试次数，移入 failed/
-                    print_warn(f"[delivery] {entry.id[:8]}... -> failed/ ({retry_info}): {error_msg}")
-                else:
-                    # 计算下次重试时间
-                    backoff = compute_backoff_ms(entry.retry_count + 1)
-                    print_warn(
-                        f"[delivery] {entry.id[:8]}... failed ({retry_info}), "
-                        f"next retry in {backoff / 1000:.0f}s: {error_msg}"
-                    )
+        if retry_num >= MAX_RETRIES:
+            print_warn(f"[delivery] {entry.id[:8]}... -> failed/ ({retry_info}): {error_msg}")
+        else:
+            backoff = compute_backoff_ms(retry_num)
+            print_warn(
+                f"[delivery] {entry.id[:8]}... failed ({retry_info}), next retry in {backoff / 1000:.0f}s: {error_msg}"
+            )
 
     def stop(self) -> None:
         """停止投递运行器"""

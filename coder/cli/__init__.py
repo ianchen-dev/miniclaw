@@ -45,7 +45,7 @@ def print_banner(title: str, model: str, extra_info: str = "") -> None:
     print_info(f"  Model: {model}")
     if extra_info:
         print_info(f"  {extra_info}")
-    print_info("  输入 'quit' 或 'exit' 退出. Ctrl+C 同样有效.")
+    print_info("  输入 /exit 退出. Ctrl+C 同样有效.")
     print_info("=" * 60)
     print()
 

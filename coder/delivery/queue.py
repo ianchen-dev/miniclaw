@@ -320,21 +320,13 @@ class DeliveryQueue:
         except FileNotFoundError:
             pass
 
-    def load_pending(self) -> List[QueuedDelivery]:
-        """
-        扫描队列目录，加载所有待处理条目
+    def _load_entries(self, directory: Path) -> List[QueuedDelivery]:
+        """从指定目录加载所有条目，按入队时间排序"""
+        if not directory.exists():
+            return []
 
-        按入队时间排序。
-
-        Returns:
-            待处理条目列表
-        """
         entries: List[QueuedDelivery] = []
-
-        if not self.queue_dir.exists():
-            return entries
-
-        for file_path in self.queue_dir.glob("*.json"):
+        for file_path in directory.glob("*.json"):
             if not file_path.is_file():
                 continue
             try:
@@ -346,33 +338,14 @@ class DeliveryQueue:
 
         entries.sort(key=lambda e: e.enqueued_at)
         return entries
+
+    def load_pending(self) -> List[QueuedDelivery]:
+        """扫描队列目录，加载所有待处理条目（按入队时间排序）"""
+        return self._load_entries(self.queue_dir)
 
     def load_failed(self) -> List[QueuedDelivery]:
-        """
-        扫描 failed/ 目录，加载所有失败条目
-
-        按入队时间排序。
-
-        Returns:
-            失败条目列表
-        """
-        entries: List[QueuedDelivery] = []
-
-        if not self.failed_dir.exists():
-            return entries
-
-        for file_path in self.failed_dir.glob("*.json"):
-            if not file_path.is_file():
-                continue
-            try:
-                with open(file_path, encoding="utf-8") as f:
-                    data = json.load(f)
-                entries.append(QueuedDelivery.from_dict(data))
-            except (json.JSONDecodeError, KeyError, OSError):
-                continue
-
-        entries.sort(key=lambda e: e.enqueued_at)
-        return entries
+        """扫描 failed/ 目录，加载所有失败条目（按入队时间排序）"""
+        return self._load_entries(self.failed_dir)
 
     def retry_failed(self) -> int:
         """
@@ -382,25 +355,18 @@ class DeliveryQueue:
             移动的条目数量
         """
         count = 0
+        for entry in self.load_failed():
+            entry.retry_count = 0
+            entry.last_error = None
+            entry.next_retry_at = 0.0
+            self._write_entry(entry)
 
-        if not self.failed_dir.exists():
-            return count
-
-        for file_path in self.failed_dir.glob("*.json"):
-            if not file_path.is_file():
-                continue
+            file_path = self.failed_dir / f"{entry.id}.json"
             try:
-                with open(file_path, encoding="utf-8") as f:
-                    data = json.load(f)
-                entry = QueuedDelivery.from_dict(data)
-                entry.retry_count = 0
-                entry.last_error = None
-                entry.next_retry_at = 0.0
-                self._write_entry(entry)
                 file_path.unlink()
-                count += 1
-            except (json.JSONDecodeError, KeyError, OSError):
-                continue
+            except OSError:
+                pass
+            count += 1
 
         return count
 

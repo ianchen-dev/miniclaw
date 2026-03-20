@@ -261,9 +261,8 @@ class CommandQueue:
 
         with self._lock:
             for name, lane in self._lanes.items():
-                with lane._condition:
-                    lane._generation += 1
-                    result[name] = lane._generation
+                lane.generation += 1
+                result[name] = lane.generation
 
         return result
 

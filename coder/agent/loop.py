@@ -694,6 +694,10 @@ class AgentLoop:
         """
         cmd, _ = self._parse_command(command)
 
+        if cmd in ("/exit", "/quit"):
+            print_goodbye()
+            return True, False
+
         if cmd == "/help":
             print_info("  Commands:")
             if self.enable_session:
@@ -716,7 +720,7 @@ class AgentLoop:
                 print_info("    /cron-trigger <id> Trigger a cron job")
                 print_info("    /lanes             Lane lock status")
             print_info("    /help              Show this help")
-            print_info("    quit / exit        Exit the REPL")
+            print_info("    /exit              Exit the REPL")
             return True, True
 
         # 先尝试调度器命令 (s07)
@@ -806,7 +810,7 @@ class AgentLoop:
         print_banner(f"Miniclaw | {section}", self.model_id, extra_info=extra_info)
 
         if self.enable_session or self.enable_intelligence or self.enable_scheduler:
-            print_info("  Type /help for commands, quit/exit to leave.")
+            print_info("  Type /help for commands, /exit to leave.")
             print()
 
         try:
@@ -821,7 +825,9 @@ class AgentLoop:
                     continue
 
                 if user_input.startswith("/"):
-                    handled, _ = self._handle_repl_command(user_input)
+                    handled, should_continue = self._handle_repl_command(user_input)
+                    if handled and not should_continue:
+                        break
                     if handled:
                         continue
 
