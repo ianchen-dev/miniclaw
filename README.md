@@ -3,7 +3,7 @@
 Miniclaw : 你的AI助手
 
 - Miniclaw 是一款受[Openclaw](https://github.com/openclaw/openclaw)启发的超轻量级个人 AI 助手
-- 比 OpenClaw 少 99% 代码行数实现核心代理功能。
+- 用 2% 的代码实现openclaw核心agent功能
 - 适合个人快速学习[Openclaw](https://github.com/openclaw/openclaw)的核心功能
 
 ## ✨ 特色功能
