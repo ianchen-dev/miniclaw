@@ -317,6 +317,19 @@ class AgentLoop:
             print_error(f"API Error: {exc}")
             return None
 
+    def _build_assistant_message(self, assistant_message: Any) -> Dict[str, Any]:
+        """构建助手消息字典"""
+        assistant_msg: Dict[str, Any] = {"role": "assistant"}
+        if assistant_message.content:
+            assistant_msg["content"] = assistant_message.content
+        if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
+            assistant_msg["tool_calls"] = assistant_message.tool_calls
+        return assistant_msg
+
+    def _serialize_content(self, text: str) -> List[Dict[str, str]]:
+        """序列化文本内容为标准格式"""
+        return [{"type": "text", "text": text}] if text else []
+
     def _handle_stop(self, assistant_message: Any) -> bool:
         """
         处理 finish_reason='stop' 的情况
@@ -327,20 +340,12 @@ class AgentLoop:
         assistant_text = assistant_message.content or ""
         print_assistant(assistant_text)
 
-        # 将助手消息添加到历史
-        assistant_msg: Dict[str, Any] = {"role": "assistant"}
-        if assistant_text:
-            assistant_msg["content"] = assistant_text
-        if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
-            assistant_msg["tool_calls"] = assistant_message.tool_calls
-        self.messages.append(assistant_msg)
+        self.messages.append(self._build_assistant_message(assistant_message))
 
-        # 保存到会话存储 (s03)
         if self._store:
-            serialized_content = [{"type": "text", "text": assistant_text}] if assistant_text else []
-            self._store.save_turn("assistant", serialized_content)
+            self._store.save_turn("assistant", self._serialize_content(assistant_text))
 
-        return True  # 跳出内层循环
+        return True
 
     def _handle_tool_calls(self, assistant_message: Any) -> bool:
         """
@@ -351,31 +356,19 @@ class AgentLoop:
         Returns:
             False 表示继续内层循环
         """
-        # 将助手消息（包含 tool_calls）添加到历史
-        assistant_msg: Dict[str, Any] = {"role": "assistant"}
-        if assistant_message.content:
-            assistant_msg["content"] = assistant_message.content
-        if hasattr(assistant_message, "tool_calls") and assistant_message.tool_calls:
-            assistant_msg["tool_calls"] = assistant_message.tool_calls
-        self.messages.append(assistant_msg)
+        self.messages.append(self._build_assistant_message(assistant_message))
 
-        # 处理每个工具调用
-        tool_calls = assistant_message.tool_calls or []
         tool_results = []
-
-        for tool_call in tool_calls:
+        for tool_call in assistant_message.tool_calls or []:
             tool_name = tool_call.function.name
             tool_input = tool_call.function.arguments
             tool_id = tool_call.id
 
-            # 执行工具
             result = process_tool_call(tool_name, tool_input)
 
-            # 保存到会话存储 (s03)
             if self._store:
                 self._store.save_tool_result(tool_id, tool_name, tool_input, result)
 
-            # 构建工具结果
             tool_results.append(
                 {
                     "tool_call_id": tool_id,
@@ -385,10 +378,8 @@ class AgentLoop:
                 }
             )
 
-        # 将工具结果添加到历史
         self.messages.extend(tool_results)
-
-        return False  # 继续内层循环
+        return False
 
     def _handle_other(self, finish_reason: str, assistant_message: Any) -> bool:
         """
@@ -409,12 +400,10 @@ class AgentLoop:
             }
         )
 
-        # 保存到会话存储 (s03)
         if self._store:
-            serialized_content = [{"type": "text", "text": assistant_text}] if assistant_text else []
-            self._store.save_turn("assistant", serialized_content)
+            self._store.save_turn("assistant", self._serialize_content(assistant_text))
 
-        return True  # 跳出内层循环
+        return True
 
     def _process_response(self, response: ModelResponse) -> bool:
         """
@@ -451,6 +440,11 @@ class AgentLoop:
 
         return user_input
 
+    def _parse_command(self, command: str) -> Tuple[str, str]:
+        """解析命令为 (cmd, arg) 元组"""
+        parts = command.strip().split(maxsplit=1)
+        return parts[0].lower(), parts[1] if len(parts) > 1 else ""
+
     def _handle_scheduler_command(self, command: str) -> Tuple[bool, bool]:
         """
         处理调度器相关的 REPL 命令 (s07)
@@ -464,9 +458,7 @@ class AgentLoop:
         if not self.enable_scheduler:
             return False, True
 
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
+        cmd, arg = self._parse_command(command)
 
         if cmd == "/heartbeat":
             print_info("--- Heartbeat Status ---")
@@ -546,9 +538,7 @@ class AgentLoop:
         if not self.enable_intelligence:
             return False, True
 
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
+        cmd, arg = self._parse_command(command)
 
         if cmd == "/soul":
             print_info("--- SOUL.md ---")
@@ -631,9 +621,7 @@ class AgentLoop:
         if not self._store or not self._guard:
             return False, True
 
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1] if len(parts) > 1 else ""
+        cmd, arg = self._parse_command(command)
 
         if cmd == "/new":
             label = arg or ""
@@ -704,10 +692,8 @@ class AgentLoop:
         Returns:
             (是否已处理, 是否应该继续循环)
         """
-        parts = command.strip().split(maxsplit=1)
-        cmd = parts[0].lower()
+        cmd, _ = self._parse_command(command)
 
-        # 帮助命令
         if cmd == "/help":
             print_info("  Commands:")
             if self.enable_session:
@@ -767,6 +753,42 @@ class AgentLoop:
             self.messages = []
             print_session(f"  Created initial session: {sid}")
 
+    def _get_banner_info(self) -> Tuple[str, str]:
+        """获取横幅标题和额外信息"""
+        extra_parts = []
+
+        if self.tools:
+            from coder.tools import TOOL_HANDLERS
+
+            extra_parts.append(f"Tools: {', '.join(TOOL_HANDLERS.keys())}")
+
+        if self.enable_scheduler:
+            section = "Section 07: 心跳与 Cron"
+            if self._heartbeat and self._cron_service:
+                hb_status = "on" if self._heartbeat.heartbeat_path.exists() else "off"
+                cron_count = len(self._cron_service.jobs)
+                extra_parts = [f"Heartbeat: {hb_status} ({self._heartbeat.interval}s) | Cron jobs: {cron_count}"]
+                if self.tools:
+                    from coder.tools import TOOL_HANDLERS
+
+                    extra_parts.append(f"Tools: {len(TOOL_HANDLERS)}")
+        elif self.enable_intelligence:
+            section = "Section 06: 智能层"
+            if self._skills_manager:
+                extra_parts.insert(0, f"Skills: {len(self._skills_manager.skills)}")
+            if self._memory_store:
+                stats = self._memory_store.get_stats()
+                extra_parts.insert(0, f"Memory: {stats['daily_entries']} entries")
+        elif self.enable_session:
+            section = "Section 03: 会话与上下文保护"
+            extra_parts.insert(0, f"Session: {self._store.current_session_id}")
+        elif self.tools:
+            section = "Section 02: 工具使用"
+        else:
+            section = "Section 01: Agent 循环"
+
+        return section, " | ".join(extra_parts)
+
     def run(self) -> None:
         """
         运行 Agent 循环
@@ -777,47 +799,10 @@ class AgentLoop:
         3. 调用 LLM（内层循环处理工具调用）
         4. 根据 finish_reason 分支处理
         """
-        # 初始化会话
         if self.enable_session:
             self._init_session()
 
-        # 打印横幅
-        extra_info = ""
-        if self.tools:
-            from coder.tools import TOOL_HANDLERS
-
-            extra_info = f"Tools: {', '.join(TOOL_HANDLERS.keys())}"
-
-        # 确定章节标题
-        if self.enable_scheduler:
-            section = "Section 07: 心跳与 Cron"
-            if self._heartbeat and self._cron_service:
-                hb_status = "on" if self._heartbeat.heartbeat_path.exists() else "off"
-                cron_count = len(self._cron_service.jobs)
-                extra_info = f"Heartbeat: {hb_status} ({self._heartbeat.interval}s) | Cron jobs: {cron_count}"
-                if self.tools:
-                    from coder.tools import TOOL_HANDLERS
-
-                    extra_info += f" | Tools: {len(TOOL_HANDLERS)}"
-        elif self.enable_intelligence:
-            section = "Section 06: 智能层"
-            if self._skills_manager:
-                extra_info = f"Skills: {len(self._skills_manager.skills)}" + (f" | {extra_info}" if extra_info else "")
-            if self._memory_store:
-                stats = self._memory_store.get_stats()
-                mem_info = f"Memory: {stats['daily_entries']} entries"
-                extra_info = f"{mem_info}" + (f" | {extra_info}" if extra_info else "")
-        elif self.enable_session:
-            section = "Section 03: 会话与上下文保护"
-            if extra_info:
-                extra_info = f"Session: {self._store.current_session_id} | {extra_info}"
-            else:
-                extra_info = f"Session: {self._store.current_session_id}"
-        elif self.tools:
-            section = "Section 02: 工具使用"
-        else:
-            section = "Section 01: Agent 循环"
-
+        section, extra_info = self._get_banner_info()
         print_banner(f"Miniclaw | {section}", self.model_id, extra_info=extra_info)
 
         if self.enable_session or self.enable_intelligence or self.enable_scheduler:
@@ -826,29 +811,24 @@ class AgentLoop:
 
         try:
             while True:
-                # 获取调度器输出 (s07)
                 if self.enable_scheduler:
                     self._drain_scheduler_output()
 
-                # 获取用户输入
                 user_input = self._get_user_input()
                 if user_input is None:
                     break
                 if not user_input:
                     continue
 
-                # REPL 命令处理
                 if user_input.startswith("/"):
                     handled, _ = self._handle_repl_command(user_input)
                     if handled:
                         continue
 
-                # Lane 互斥: 用户消息始终优先 (s07)
                 if self._lane_lock:
                     self._lane_lock.acquire()
 
                 try:
-                    # 自动记忆召回 (s06)
                     memory_context = ""
                     if self.enable_intelligence and self._memory_store:
                         from coder.intelligence import auto_recall
@@ -857,10 +837,8 @@ class AgentLoop:
                         if memory_context:
                             print_info("  [自动召回] 找到相关记忆")
 
-                    # 构建系统提示词 (每轮重建，因为记忆可能被更新)
                     system_prompt = self._build_system_prompt(user_input)
 
-                    # 追加到历史
                     self.messages.append(
                         {
                             "role": "user",
@@ -868,35 +846,27 @@ class AgentLoop:
                         }
                     )
 
-                    # 保存到会话存储 (s03)
                     if self._store:
                         self._store.save_turn("user", user_input)
 
-                    # 内层循环：处理工具调用
-                    # 模型可能连续调用多个工具才最终给出文本回复
                     while True:
-                        # 调用 LLM
                         response = self._call_llm(system_prompt)
                         if response is None:
-                            # API 错误，回滚消息到最近的 user 消息
                             while self.messages and self.messages[-1]["role"] != "user":
                                 self.messages.pop()
                             if self.messages:
                                 self.messages.pop()
                             break
 
-                        # 处理响应
                         should_break = self._process_response(response)
                         if should_break:
                             break
 
                 finally:
-                    # 释放 Lane 锁 (s07)
                     if self._lane_lock:
                         self._lane_lock.release()
 
         finally:
-            # 停止调度器 (s07)
             if self.enable_scheduler:
                 self._stop_scheduler()
 
