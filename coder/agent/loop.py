@@ -146,6 +146,10 @@ class AgentLoop:
         self._cron_stop_event: Optional[threading.Event] = None
         self._cron_thread: Optional[threading.Thread] = None
 
+        # Todo 组件 (s11)
+        self._rounds_since_todo = 0
+        self._todo_manager = None
+
         if self.enable_session:
             from coder.session import ContextGuard, SessionStore
 
@@ -157,6 +161,14 @@ class AgentLoop:
 
         if self.enable_scheduler:
             self._init_scheduler()
+
+        # 初始化 Todo 管理器 (s11)
+        if getattr(settings, "todo_enabled", True):
+            from coder.tools import TodoManager, set_todo_manager
+
+            max_items = getattr(settings, "todo_max_items", 20)
+            self._todo_manager = TodoManager(max_items=max_items)
+            set_todo_manager(self._todo_manager)
 
         # 配置 litellm
         if self.api_base_url:
@@ -359,6 +371,29 @@ class AgentLoop:
         self.messages.append(self._build_assistant_message(assistant_message))
 
         tool_results = []
+
+        # 检测是否使用了 todo 工具 (s11)
+        used_todo = False
+        for tool_call in assistant_message.tool_calls or []:
+            if tool_call.function.name == "todo":
+                used_todo = True
+                break
+
+        # 更新计数器
+        if used_todo:
+            self._rounds_since_todo = 0
+        else:
+            self._rounds_since_todo += 1
+
+        # 注入 nag 提醒 (s11)
+        nag_threshold = getattr(settings, "todo_nag_threshold", 3)
+        if self._rounds_since_todo >= nag_threshold:
+            reminder = {
+                "role": "user",
+                "content": "<reminder>Update your todos. Use the todo tool to track your progress.</reminder>",
+            }
+            tool_results.insert(0, reminder)
+
         for tool_call in assistant_message.tool_calls or []:
             tool_name = tool_call.function.name
             tool_input = tool_call.function.arguments
@@ -682,6 +717,28 @@ class AgentLoop:
 
         return False, True
 
+    def _handle_todo_command(self, command: str) -> Tuple[bool, bool]:
+        """
+        处理 Todo 相关的 REPL 命令 (s11)
+
+        Args:
+            command: 用户输入的命令
+
+        Returns:
+            (是否已处理, 是否应该继续循环)
+        """
+        cmd, arg = self._parse_command(command)
+
+        if cmd == "/todo":
+            print_info("--- Current Todos ---")
+            if self._todo_manager:
+                print(self._todo_manager.render())
+            else:
+                print_info("  (Todo manager not initialized)")
+            return True, True
+
+        return False, True
+
     def _handle_repl_command(self, command: str) -> Tuple[bool, bool]:
         """
         处理以 / 开头的 REPL 命令。
@@ -719,9 +776,16 @@ class AgentLoop:
                 print_info("    /cron              List cron jobs")
                 print_info("    /cron-trigger <id> Trigger a cron job")
                 print_info("    /lanes             Lane lock status")
+            if self._todo_manager:
+                print_info("    /todo              Show current todos")
             print_info("    /help              Show this help")
             print_info("    /exit              Exit the REPL")
             return True, True
+
+        # 先尝试 Todo 命令 (s11)
+        handled, should_continue = self._handle_todo_command(command)
+        if handled:
+            return handled, should_continue
 
         # 先尝试调度器命令 (s07)
         handled, should_continue = self._handle_scheduler_command(command)
