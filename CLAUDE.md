@@ -76,6 +76,8 @@ coder/                    # Core application module
 ├── agent/                # Agent loop (s01) - core REPL with stop_reason flow
 │   └── loop.py           # AgentLoop class
 ├── tools/                # Tool use (s02) - TOOLS schema + TOOL_HANDLERS dispatch
+│   ├── schema.py         # Tool schemas (BASE_TOOLS, MEMORY_TOOLS, TODO_TOOLS)
+│   └── handlers.py       # Tool handlers (TodoManager, process_tool_call)
 ├── session/              # Session & context (s03) - JSONL persistence, ContextGuard overflow protection
 ├── channels/             # Multi-channel (s04) - Channel ABC, CLI/Telegram/Feishu implementations
 ├── gateway/              # Gateway & routing (s05) - BindingTable 5-tier routing, WebSocket gateway
@@ -158,6 +160,7 @@ Key feature toggles (see `.env.example` for full list):
 - Gateway: `GATEWAY_ENABLED`, `GATEWAY_PORT`
 - Intelligence: `WORKSPACE_DIR`, `MAX_SKILLS`, `MEMORY_TOP_K`
 - Scheduler: `HEARTBEAT_INTERVAL`, `CRON_AUTO_DISABLE_THRESHOLD`
+- Todo: `TODO_ENABLED`, `TODO_NAG_THRESHOLD`, `TODO_MAX_ITEMS`
 
 Settings class in `coder/settings.py` uses Pydantic Settings with automatic env var loading.
 

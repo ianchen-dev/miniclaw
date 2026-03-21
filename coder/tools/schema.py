@@ -170,8 +170,43 @@ MEMORY_TOOLS: List[Dict[str, Any]] = [
     },
 ]
 
-# 完整工具列表 (基础 + 记忆)
-TOOLS: List[Dict[str, Any]] = BASE_TOOLS + MEMORY_TOOLS
+# Todo 工具 (s11)
+TODO_TOOLS: List[Dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "todo",
+            "description": (
+                "Update your task list. Use this to plan and track progress "
+                "on multi-step tasks. Only one task can be in_progress at a time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "text": {"type": "string"},
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed"],
+                                },
+                            },
+                            "required": ["id", "text", "status"],
+                        },
+                    }
+                },
+                "required": ["items"],
+            },
+        },
+    },
+]
+
+# 完整工具列表 (基础 + 记忆 + Todo)
+TOOLS: List[Dict[str, Any]] = BASE_TOOLS + MEMORY_TOOLS + TODO_TOOLS
 
 
-__all__ = ["TOOLS", "BASE_TOOLS", "MEMORY_TOOLS"]
+__all__ = ["TOOLS", "BASE_TOOLS", "MEMORY_TOOLS", "TODO_TOOLS"]

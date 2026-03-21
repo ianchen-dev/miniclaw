@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     lane_cron_max_concurrency: int = 1  # cron lane 最大并发数
     lane_heartbeat_max_concurrency: int = 1  # heartbeat lane 最大并发数
 
+    # Todo 配置 (s11)
+    todo_enabled: bool = True  # 是否启用 todo 工具
+    todo_nag_threshold: int = 3  # 多少轮不使用 todo 后显示提醒
+    todo_max_items: int = 20  # 最大 todo 条目数
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

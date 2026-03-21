@@ -20,7 +20,8 @@ Miniclaw : 你的AI助手
 - ✅ **消息投递 (s08)**: DeliveryQueue 磁盘持久化，原子写入，指数退避重试
 - ✅ **弹性 (s09)**: 3层重试洋葱，AuthProfile key轮换，备选模型链
 - ✅ **并发 (s10)**: LaneQueue 命名lane，CommandQueue 调度器，Generation 追踪
-- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发独立封装
+- ✅ **Todo 工具 (s11)**: TodoManager 任务列表，状态验证，nag 提醒机制
+- ✅ **模块化组件**: CLI、提示词、Agent 循环、工具、会话、通道、网关、智能层、调度器、投递、弹性、并发、todo 独立封装
 - ✅ **类型安全配置**: Pydantic Settings 配置管理
 
 ## 项目结构

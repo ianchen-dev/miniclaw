@@ -131,5 +131,7 @@ docs/not-committed
 # workspace
 /workspace
 
-# claude 
-.claude
+# dev 
+.claude/
+CLAUDE.md
+openspec/

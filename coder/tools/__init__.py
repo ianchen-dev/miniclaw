@@ -8,6 +8,7 @@ Tools 组件 - 工具定义与处理器
     - edit_file: 精确替换文件中的文本
     - memory_write: 保存记忆 (s06)
     - memory_search: 搜索记忆 (s06)
+    - todo: 任务列表管理 (s11)
 
 核心概念:
     TOOLS = 告诉模型 "你有哪些工具可用" (JSON schema)
@@ -29,21 +30,28 @@ Tools 组件 - 工具定义与处理器
 
 from coder.tools.handlers import (
     TOOL_HANDLERS,
+    TodoManager,
+    get_todo_manager,
     process_tool_call,
     set_memory_store,
+    set_todo_manager,
     tool_memory_search,
     tool_memory_write,
 )
-from coder.tools.schema import BASE_TOOLS, MEMORY_TOOLS, TOOLS
+from coder.tools.schema import BASE_TOOLS, MEMORY_TOOLS, TODO_TOOLS, TOOLS
 
 
 __all__ = [
     "TOOLS",
     "BASE_TOOLS",
     "MEMORY_TOOLS",
+    "TODO_TOOLS",
     "TOOL_HANDLERS",
     "process_tool_call",
     "set_memory_store",
+    "TodoManager",
+    "get_todo_manager",
+    "set_todo_manager",
     "tool_memory_write",
     "tool_memory_search",
 ]

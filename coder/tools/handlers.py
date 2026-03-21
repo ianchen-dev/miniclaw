@@ -12,7 +12,7 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Dict, List, Union
 
 from coder.cli import print_tool
 from coder.intelligence.memory import MemoryStore
@@ -41,6 +41,139 @@ def set_memory_store(store: MemoryStore) -> None:
     """设置记忆存储单例实例（由 AgentLoop 注入）。"""
     global _memory_store
     _memory_store = store
+
+
+# ---------------------------------------------------------------------------
+# Todo 管理器 (s11)
+# ---------------------------------------------------------------------------
+
+
+class TodoManager:
+    """
+    管理 Todo 列表状态，提供验证和渲染功能。
+
+    验证规则:
+        - 最多 20 个条目
+        - 每个条目必须有 id (str), text (非空), status (pending/in_progress/completed)
+        - 只能有一个条目处于 in_progress 状态
+    """
+
+    def __init__(self, max_items: int = 20) -> None:
+        """
+        初始化 Todo 管理器。
+
+        Args:
+            max_items: 最大条目数，默认从配置读取
+        """
+        self.items: List[Dict[str, str]] = []
+        self.max_items = max_items
+
+    def update(self, items: List[Dict[str, Any]]) -> str:
+        """
+        更新 Todo 列表，带完整验证。
+
+        Args:
+            items: Todo 条目列表，每个条目包含 id, text, status
+
+        Returns:
+            渲染后的 Todo 列表字符串
+
+        Raises:
+            ValueError: 验证失败时抛出
+        """
+        # 验证: 最大条目数
+        if len(items) > self.max_items:
+            raise ValueError(f"Too many todo items (max {self.max_items}, got {len(items)})")
+
+        # 验证: 每个条目的字段
+        valid_statuses = {"pending", "in_progress", "completed"}
+        in_progress_count = 0
+
+        for item in items:
+            # 检查必需字段
+            if "id" not in item:
+                raise ValueError("Todo item missing 'id' field")
+            if "text" not in item:
+                raise ValueError("Todo item missing 'text' field")
+            if "status" not in item:
+                raise ValueError("Todo item missing 'status' field")
+
+            # 验证字段类型
+            if not isinstance(item["id"], str):
+                raise ValueError(f"Todo item 'id' must be string, got {type(item['id']).__name__}")
+            if not isinstance(item["text"], str):
+                raise ValueError(f"Todo item 'text' must be string, got {type(item['text']).__name__}")
+            if not isinstance(item["status"], str):
+                raise ValueError(f"Todo item 'status' must be string, got {type(item['status']).__name__}")
+
+            # 验证 text 非空
+            if not item["text"].strip():
+                raise ValueError("Todo item 'text' cannot be empty")
+
+            # 验证 status 值
+            if item["status"] not in valid_statuses:
+                raise ValueError(f"Invalid status '{item['status']}', must be one of: {valid_statuses}")
+
+            # 统计 in_progress 数量
+            if item["status"] == "in_progress":
+                in_progress_count += 1
+
+        # 验证: 只能有一个 in_progress
+        if in_progress_count > 1:
+            raise ValueError(f"Only one todo can be in_progress at a time (found {in_progress_count})")
+
+        self.items = items
+        return self.render()
+
+    def render(self) -> str:
+        """
+        渲染 Todo 列表为格式化字符串。
+
+        格式:
+            [ ] #1: task name
+            [>] #2: current task (in_progress)
+            [x] #3: completed task
+            (1/3 completed)
+        """
+        if not self.items:
+            return "No todos."
+
+        lines = []
+        completed_count = 0
+
+        for item in self.items:
+            status = item["status"]
+            item_id = item["id"]
+            text = item["text"]
+
+            if status == "pending":
+                marker = "[ ]"
+            elif status == "in_progress":
+                marker = "[>]"
+            else:  # completed
+                marker = "[x]"
+                completed_count += 1
+
+            lines.append(f"{marker} #{item_id}: {text}")
+
+        lines.append(f"({completed_count}/{len(self.items)} completed)")
+        return "\n".join(lines)
+
+
+# Todo 管理器实例 (单例)
+_todo_manager: TodoManager | None = None
+
+
+def get_todo_manager() -> TodoManager | None:
+    """获取 Todo 管理器单例实例。"""
+    global _todo_manager
+    return _todo_manager
+
+
+def set_todo_manager(manager: TodoManager) -> None:
+    """设置 Todo 管理器单例实例（由 AgentLoop 注入）。"""
+    global _todo_manager
+    _todo_manager = manager
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +322,18 @@ def tool_memory_search(query: str, top_k: int = 5) -> str:
         return f"Error: {exc}"
 
 
+def tool_todo(items: List[Dict[str, Any]]) -> str:
+    """更新任务列表，用于规划和跟踪多步骤任务的进度。"""
+    print_tool("todo", f"{len(items)} items")
+    try:
+        manager = get_todo_manager()
+        if manager is None:
+            return "Error: Todo manager not initialized. Enable todo feature in settings."
+        return manager.update(items)
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
 # ---------------------------------------------------------------------------
 # 工具调度表
 # ---------------------------------------------------------------------------
@@ -200,6 +345,7 @@ TOOL_HANDLERS: Dict[str, Callable[..., str]] = {
     "edit_file": tool_edit_file,
     "memory_write": tool_memory_write,
     "memory_search": tool_memory_search,
+    "todo": tool_todo,
 }
 
 
@@ -239,6 +385,9 @@ __all__ = [
     "WORKDIR",
     "get_memory_store",
     "set_memory_store",
+    "TodoManager",
+    "get_todo_manager",
+    "set_todo_manager",
     "safe_path",
     "truncate",
     "tool_bash",
@@ -247,6 +396,7 @@ __all__ = [
     "tool_edit_file",
     "tool_memory_write",
     "tool_memory_search",
+    "tool_todo",
     "TOOL_HANDLERS",
     "process_tool_call",
 ]
