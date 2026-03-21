@@ -37,6 +37,12 @@ def get_memory_store() -> MemoryStore:
     return _memory_store
 
 
+def set_memory_store(store: MemoryStore) -> None:
+    """设置记忆存储单例实例（由 AgentLoop 注入）。"""
+    global _memory_store
+    _memory_store = store
+
+
 # ---------------------------------------------------------------------------
 # 安全辅助函数
 # ---------------------------------------------------------------------------
@@ -232,6 +238,7 @@ __all__ = [
     "MAX_TOOL_OUTPUT",
     "WORKDIR",
     "get_memory_store",
+    "set_memory_store",
     "safe_path",
     "truncate",
     "tool_bash",

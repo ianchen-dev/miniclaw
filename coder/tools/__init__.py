@@ -30,6 +30,7 @@ Tools 组件 - 工具定义与处理器
 from coder.tools.handlers import (
     TOOL_HANDLERS,
     process_tool_call,
+    set_memory_store,
     tool_memory_search,
     tool_memory_write,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "MEMORY_TOOLS",
     "TOOL_HANDLERS",
     "process_tool_call",
+    "set_memory_store",
     "tool_memory_write",
     "tool_memory_search",
 ]
